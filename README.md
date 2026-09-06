@@ -5,6 +5,8 @@ Read code the way a model should. `peek` is a replacement for the `cat` / `grep`
 that every call returns exactly what was asked for, numbered, sized, and aware of the code's
 structure.
 
+[日本語](README_ja.md)
+
 ```
 peek src/lower.rs --symbol lower_match       one function, found by name
 peek src/lower.rs --grep "Expr::Match" --around 4   matches with context, labelled by enclosing fn
@@ -115,6 +117,24 @@ peek tree <dir> [--depth N]
 `--max-files` to 50. Regexes are Rust-syntax without `\b` or lazy quantifiers (Almide's
 regex). `grep` and `tree` skip `.git`, `target`, `node_modules`, `dist`, `build`, `vendor`,
 virtualenvs and files over 2 MB.
+
+## Architecture
+
+![peek architecture](docs/architecture.svg)
+
+The agent calls `peek` through Bash. `main` parses the arguments, picks the command and
+composes three modules:
+
+- **view** — takes the line windows to show and produces numbered lines, clipping, gap
+  markers, header and footer.
+- **outline** — the table of contents. Almide has its own parser; Rust / Go / TS·JS / Python
+  use a per-language table of declaration rules and get their ranges from brace matching
+  (indentation for Python). `find(name)` looks a symbol up by name, `enclosing(line)` by line.
+- **search** — walks directories (skipping vcs / build / deps / binaries), groups matches per
+  file, folds identical lines, applies caps, and asks outline for the enclosing symbol.
+
+When `ctxgate-outline` (tree-sitter) is on PATH, Rust / Go / TS / Python outlines come from
+it; otherwise the built-in rules are used.
 
 ## Relationship to ctxgate
 
