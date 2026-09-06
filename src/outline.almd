@@ -224,8 +224,8 @@ fn of_lines(lang: String, lines: List[String]) -> Outline = {
 
 effect fn of_file(path: String, lines: List[String]) -> Outline = {
   let lang = lang_of(path)
-  if lang == "almide" or lang == "text" then of_lines(lang, lines)
-  else match via_helper(path) ?? none {
+  if lang == "almide" then of_lines(lang, lines)
+  else match via_helper(path) ?? none {     // the external provider may know languages we do not
     some(o) => o,
     none => of_lines(lang, lines),
   }
