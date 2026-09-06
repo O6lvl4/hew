@@ -1,0 +1,109 @@
+// search — grep that knows about files and symbols.
+//
+// Walks the given paths (skipping VCS / build / dependency dirs and binaries), groups matches
+// per file, folds identical lines, caps per file and in total, and names the enclosing symbol
+// of each match so the model knows *where* it is without opening the file.
+import fs
+import regex
+import self.outline
+import self.view
+
+let SKIP_DIRS = [".git", ".hg", ".svn", "target", "node_modules", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".claude", "vendor", ".cache"]
+let MAX_FILE_BYTES = 2_000_000
+
+type Hit = { line: Int, text: String, sym: String }
+type FileHits = { path: String, hits: List[Hit], total: Int }
+
+fn skipped_dir(name: String) -> Bool = list.contains(SKIP_DIRS, name)
+
+fn basename(p: String) -> String = match string.last_index_of(p, "/") { some(i) => string.drop(p, i + 1), none => p }
+
+fn under_skipped(path: String) -> Bool = list.any(string.split(path, "/"), (seg) => skipped_dir(seg))
+
+// All regular files under `paths` (files are taken as they are, dirs walked), deterministic order.
+effect fn collect(paths: List[String]) -> List[String] = {
+  var out: List[String] = []
+  for p in paths {
+    if fs.is_dir(p) then {
+      let all = fs.walk(p) ?? []
+      for f in list.sort(all) { if under_skipped(string.drop(f, string.len(p))) or not fs.is_file(f) then () else list.push(out, f) }
+    } else if fs.is_file(p) then list.push(out, p) else ()
+  }
+  out
+}
+
+fn looks_binary(text: String) -> Bool = string.contains(string.take(text, 4000), "\u{0}")
+
+// Fold identical (trimmed) lines into one hit with a "×N" note; keep first `per_file`.
+fn fold_hits(hits: List[Hit], per_file: Int) -> List[Hit] = {
+  var seen: List[String] = []
+  var counts: List[Int] = []
+  var out: List[Hit] = []
+  for h in hits {
+    let key = string.trim(h.text)
+    match list.find_index(seen, (s) => s == key) {
+      some(i) => { counts = list.enumerate(counts) |> list.map((p) => if p.0 == i then p.1 + 1 else p.1) },
+      none => { list.push(seen, key); list.push(counts, 1); list.push(out, h) },
+    }
+  }
+  let annotated = list.enumerate(out) |> list.map((p) => {
+    let n = list.get(counts, p.0) ?? 1
+    if n > 1 then Hit { ...p.1, sym: if p.1.sym == "" then "×${int.to_string(n)}" else "${p.1.sym}  ×${int.to_string(n)}" } else p.1
+  })
+  list.take(annotated, per_file)
+}
+
+effect fn search_file(path: String, pat: String, per_file: Int) -> Option[FileHits] = {
+  let size = fs.file_size(path) ?? 0
+  guard size <= MAX_FILE_BYTES else none
+  let text = match fs.read_text(path) { ok(t) => t, err(_) => "" }
+  guard text != "" and not looks_binary(text) else none
+  let lines = string.lines(text)
+  let matched = list.enumerate(lines) |> list.filter((p) => regex.is_match(pat, p.1))
+  guard not list.is_empty(matched) else none
+  let o = outline.of_lines(outline.lang_of(path), lines)
+  let hits = list.map(matched, (p) => Hit {
+    line: p.0 + 1, text: p.1,
+    sym: match outline.enclosing(o, p.0 + 1) { some(s) => s.name, none => "" },
+  })
+  some(FileHits { path: path, hits: fold_hits(hits, per_file), total: list.len(matched) })
+}
+
+effect fn run(pat: String, paths: List[String], per_file: Int, max_files: Int) -> List[FileHits] = {
+  var out: List[FileHits] = []
+  for f in collect(paths)! {
+    if list.len(out) >= max_files then () else match search_file(f, pat, per_file) ?? none {
+      some(fh) => list.push(out, fh),
+      none => (),
+    }
+  }
+  out
+}
+
+fn render(results: List[FileHits], clip_at: Int) -> List[String] = {
+  var out: List[String] = []
+  let total = list.sum(list.map(results, (r) => r.total))
+  list.push(out, "# ${int.to_string(total)} matches in ${int.to_string(list.len(results))} files")
+  for r in results {
+    list.push(out, "${r.path}  (${int.to_string(r.total)})")
+    let width = view.digits(list.fold(r.hits, 1, (m, h) => int.max(m, h.line)))
+    for h in r.hits {
+      let where = if h.sym == "" then "" else "    ‹${h.sym}›"
+      list.push(out, "  ${view.pad_left(int.to_string(h.line), width)}│ ${view.clip(string.trim(h.text), clip_at)}${where}")
+    }
+    if r.total > list.len(r.hits) then list.push(out, "  … ${int.to_string(r.total - list.len(r.hits))} more in this file (--per-file N, or --lines on the file)") else ()
+  }
+  out
+}
+
+test "fold_hits collapses identical lines" {
+  let hs = [Hit { line: 1, text: "use x;", sym: "" }, Hit { line: 5, text: "  use x;", sym: "" }, Hit { line: 9, text: "fn a()", sym: "a" }]
+  let f = fold_hits(hs, 10)
+  assert_eq(list.len(f), 2)
+  assert_eq((list.first(f) ?? Hit { line: 0, text: "", sym: "" }).sym, "×2")
+}
+
+test "under_skipped" {
+  assert(under_skipped("/a/node_modules/x.js"))
+  assert(not under_skipped("/a/src/x.js"))
+}

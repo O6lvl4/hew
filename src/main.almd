@@ -1,0 +1,201 @@
+// peek — read code the way a model should: numbered, sliced, structure-aware, sized.
+//
+//   peek <file>                          the whole file, numbered (clipped lines, size header)
+//   peek <file> --lines A-B              a range
+//   peek <file> --symbol NAME            one function / type / class, found by the outline
+//   peek <file> --grep RE [--around N]   matching lines with context, merged, labelled by symbol
+//   peek <file> --head N | --tail N
+//   peek outline <file|dir> [--max N]    symbol table
+//   peek grep RE [path...] [--per-file N] [--max-files N]
+//   peek tree <dir> [--depth N]
+import fs
+import env
+import process
+import self.view
+import self.outline
+import self.search
+
+let VERSION = "0.1.0"
+
+fn usage() -> String = """peek ${VERSION} — read code the way a model should
+
+  peek <file> [--lines A-B] [--symbol NAME] [--grep RE] [--around N] [--head N] [--tail N] [--clip N]
+  peek outline <file|dir> [--max N]
+  peek grep <RE> [path...] [--per-file N] [--max-files N]
+  peek tree <dir> [--depth N]
+
+Output is numbered so you can come back with --lines; long lines are clipped; gaps are marked.
+--symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python (tree-sitter via
+ctxgate-outline when installed)."""
+
+// ── tiny arg parser ───────────────────────────────────────────────────────
+fn opt(args: List[String], name: String) -> Option[String] =
+  match list.find_index(args, (a) => a == name) { some(i) => list.get(args, i + 1), none => none }
+
+fn opt_int(args: List[String], name: String, default: Int) -> Int =
+  match opt(args, name) { some(v) => int.parse(v) ?? default, none => default }
+
+fn has(args: List[String], name: String) -> Bool = list.contains(args, name)
+
+// Positionals: anything not an option and not an option's value.
+fn positionals(args: List[String]) -> List[String] = {
+  let valued = ["--lines", "--symbol", "--grep", "--around", "--head", "--tail", "--clip", "--max", "--per-file", "--max-files", "--depth"]
+  var out: List[String] = []
+  var skip = false
+  for a in args {
+    if skip then skip = false
+    else if list.contains(valued, a) then skip = true
+    else if string.starts_with(a, "--") then ()
+    else list.push(out, a)
+  }
+  out
+}
+
+fn parse_range(s: String) -> Option[(Int, Int)] = match string.split_once(s, "-") {
+  some((a, b)) => match int.parse(a) {
+    ok(x) => match int.parse(b) { ok(y) => some((x, y)), err(_) => none },
+    err(_) => none,
+  },
+  none => match int.parse(s) { ok(x) => some((x, x)), err(_) => none },
+}
+
+// Which lines to show, from the options. Errors name what to do instead.
+effect fn select_windows(path: String, lines: List[String], total: Int, args: List[String], around: Int) -> Result[List[view.Window], String] = {
+  match opt(args, "--symbol") {
+    some(name) => {
+      let o = outline.of_file(path, lines)!
+      match outline.find(o, name) {
+        some(s) => ok([view.Window { start: s.start, end: s.end, note: "${s.kind} ${s.name}" }]),
+        none => {
+          let needle = string.to_lower(name)   // a separate binding: the closure moves what it captures (almide codegen)
+          let near = list.filter(o.symbols, (s) => string.contains(string.to_lower(s.name), needle))
+          let hint = if list.is_empty(near) then "run `peek outline ${path}`" else "did you mean: " + list.join(list.map(list.take(near, 5), (s) => s.name), ", ")
+          err("no symbol `${name}` in ${path} (${hint})")
+        },
+      }
+    },
+    none => match opt(args, "--lines") {
+      some(r) => match parse_range(r) {
+        some((a, b)) => ok([view.Window { start: a, end: b, note: "" }]),
+        none => err("bad --lines ${r} (want A-B)"),
+      },
+      none => match opt(args, "--grep") {
+        some(pat) => {
+          let ws = view.grep_windows(lines, pat, around)
+          guard not list.is_empty(ws) else err("no line in ${path} matches /${pat}/")
+          let o = outline.of_file(path, lines)!
+          ok(list.map(ws, (w) => view.Window { ...w, note: match outline.enclosing(o, w.start + around) { some(s) => "in ${s.kind} ${s.name}", none => "" } }))
+        },
+        none => match opt(args, "--head") {
+          some(n) => ok([view.Window { start: 1, end: int.parse(n) ?? 30, note: "" }]),
+          none => match opt(args, "--tail") {
+            some(n) => ok([view.Window { start: total - (int.parse(n) ?? 30) + 1, end: total, note: "" }]),
+            none => ok([view.Window { start: 1, end: total, note: "" }]),
+          },
+        },
+      },
+    },
+  }
+}
+
+// ── peek <file> ───────────────────────────────────────────────────────────
+effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
+  guard fs.is_file(path) else err("no such file: ${path}")
+  let text = fs.read_text(path)!
+  let lines = string.lines(text)
+  let total = list.len(lines)
+  let clip_at = opt_int(args, "--clip", view.CLIP)
+  let around = opt_int(args, "--around", 3)
+  let windows = select_windows(path, lines, total, args, around)!
+  let body = view.render_windows(lines, windows, clip_at)
+  println(view.header(path, total, string.len(text)))
+  for l in body { println(l) }
+  let shown = list.count(body, (l) => string.contains(l, "│"))
+  println(view.footer(shown, list.sum(list.map(body, (l) => string.len(l) + 1))))
+  ok(())
+}
+
+// ── peek outline ──────────────────────────────────────────────────────────
+effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
+  let target = list.get(positionals(args), 1) ?? "."
+  let max = opt_int(args, "--max", 120)
+  let files = if fs.is_dir(target) then search.collect([target])! |> list.filter((f) => outline.lang_of(f) != "text") else [target]
+  guard not list.is_empty(files) else err("nothing to outline under ${target}")
+  for f in files {
+    let lines = string.lines(fs.read_text(f)!)
+    let o = outline.of_file(f, lines)!
+    if list.is_empty(o.symbols) and list.len(files) > 1 then () else {
+      println("# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols)")
+      for l in outline.render(o, max) { println(l) }
+    }
+  }
+  ok(())
+}
+
+// ── peek grep ─────────────────────────────────────────────────────────────
+effect fn cmd_grep(args: List[String]) -> Result[Unit, String] = {
+  let pos = positionals(args)
+  let pat = list.get(pos, 1) ?? ""
+  guard pat != "" else err("usage: peek grep <RE> [path...]")
+  let paths = if list.len(pos) > 2 then list.drop(pos, 2) else ["."]
+  let results = search.run(pat, paths, opt_int(args, "--per-file", 20), opt_int(args, "--max-files", 50))!
+  for l in search.render(results, opt_int(args, "--clip", view.CLIP)) { println(l) }
+  ok(())
+}
+
+// ── peek tree ─────────────────────────────────────────────────────────────
+effect fn cmd_tree(args: List[String]) -> Result[Unit, String] = {
+  let root = list.get(positionals(args), 1) ?? "."
+  let depth = opt_int(args, "--depth", 3)
+  guard fs.is_dir(root) else err("not a directory: ${root}")
+  println("# ${root}")
+  tree_dir(root, "", 1, depth)!
+  ok(())
+}
+
+effect fn tree_dir(dir: String, indent: String, level: Int, max_depth: Int) -> Result[Unit, String] = {
+  let names = list.sort(fs.list_dir(dir)!) |> list.map((n) => search.basename(n))
+  let visible = list.filter(names, (n) => not search.skipped_dir(n))
+  let hidden = list.len(names) - list.len(visible)
+  let dirs = list.filter(visible, (n) => fs.is_dir("${dir}/${n}"))
+  let files = list.filter(visible, (n) => not fs.is_dir("${dir}/${n}"))
+  for d in dirs {
+    let count = list.len(fs.walk("${dir}/${d}") ?? [])
+    println("${indent}${d}/  (${int.to_string(count)})")
+    if level < max_depth then tree_dir("${dir}/${d}", indent + "  ", level + 1, max_depth)! else ()
+  }
+  let shown = list.take(files, 40)
+  for f in shown { println("${indent}${f}  ${view.human(fs.file_size("${dir}/${f}") ?? 0)}") }
+  if list.len(files) > 40 then println("${indent}… ${int.to_string(list.len(files) - 40)} more files") else ()
+  if hidden > 0 then println("${indent}(${int.to_string(hidden)} skipped: vcs / build / deps)") else ()
+  ok(())
+}
+
+// ── dispatch ──────────────────────────────────────────────────────────────
+effect fn run(args: List[String]) -> Result[Unit, String] = {
+  let first = list.first(args) ?? ""
+  if first == "" or first == "--help" or first == "-h" then { println(usage()); ok(()) }
+  else if first == "--version" then { println("peek ${VERSION}"); ok(()) }
+  else if first == "outline" then cmd_outline(args)
+  else if first == "grep" then cmd_grep(args)
+  else if first == "tree" then cmd_tree(args)
+  else cmd_file(first, args)
+}
+
+effect fn main() -> Unit = {
+  match run(env.args()) {
+    ok(_) => (),
+    err(e) => { eprintln("peek: ${e}"); process.exit(1) },
+  }
+}
+
+test "positionals skip option values" {
+  assert_eq(positionals(["grep", "foo", "src", "--per-file", "5", "--clip", "80"]), ["grep", "foo", "src"])
+  assert_eq(positionals(["a.rs", "--symbol", "x"]), ["a.rs"])
+}
+
+test "parse_range" {
+  assert_eq(parse_range("10-20"), some((10, 20)))
+  assert_eq(parse_range("7"), some((7, 7)))
+  assert_eq(parse_range("x"), none)
+}

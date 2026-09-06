@@ -1,0 +1,294 @@
+// outline — a file's table of contents: symbol kind, name, line range.
+//
+//   .almd              parsed here (top-level fn / effect fn / type / protocol / let / test)
+//   rust go ts js py   parsed here from declaration lines; ranges by brace matching (or
+//                      indentation for Python). Good enough to cut a symbol out of a file.
+//   anything, when `ctxgate-outline` (tree-sitter) is on PATH: that wins for those languages.
+import json
+import regex
+import process
+
+type Sym = { kind: String, name: String, start: Int, end: Int }
+type Outline = { lang: String, total_lines: Int, symbols: List[Sym] }
+
+let HELPER = "ctxgate-outline"
+
+fn lang_of(path: String) -> String =
+  if string.ends_with(path, ".almd") then "almide"
+  else if string.ends_with(path, ".rs") then "rust"
+  else if string.ends_with(path, ".go") then "go"
+  else if string.ends_with(path, ".ts") or string.ends_with(path, ".tsx") then "typescript"
+  else if string.ends_with(path, ".js") or string.ends_with(path, ".jsx") or string.ends_with(path, ".mjs") then "javascript"
+  else if string.ends_with(path, ".py") then "python"
+  else "text"
+
+// ── .almd ─────────────────────────────────────────────────────────────────
+fn almd_name(rest: String) -> String = regex.find("^[A-Za-z_][A-Za-z0-9_.]*", rest) ?? ""
+
+fn almd_decl(line: String) -> Option[(String, String)] =
+  if string.starts_with(line, "effect fn ") then some(("effect fn", almd_name(string.drop(line, 10))))
+  else if string.starts_with(line, "fn ") then some(("fn", almd_name(string.drop(line, 3))))
+  else if string.starts_with(line, "type ") then some(("type", almd_name(string.drop(line, 5))))
+  else if string.starts_with(line, "protocol ") then some(("protocol", almd_name(string.drop(line, 9))))
+  else if string.starts_with(line, "let ") then some(("let", almd_name(string.drop(line, 4))))
+  else if string.starts_with(line, "test \"") then match string.split_once(string.drop(line, 6), "\"") {
+    some((name, _)) => some(("test", name)),
+    none => none,
+  }
+  else none
+
+fn trim_end(lines: List[String], start: Int, end: Int) -> Int = {
+  var e = end
+  var go = true
+  while go and e > start {
+    let l = string.trim(list.get(lines, e - 1) ?? "")
+    if l == "" or string.starts_with(l, "//") or string.starts_with(l, "#") then e = e - 1 else go = false
+  }
+  e
+}
+
+fn almd_outline(lines: List[String]) -> List[Sym] = {
+  let total = list.len(lines)
+  let starts = list.enumerate(lines) |> list.filter_map((p) => match almd_decl(p.1) {
+    some((kind, name)) => some((p.0 + 1, kind, name)),
+    none => none,
+  })
+  list.enumerate(starts) |> list.map((p) => {
+    let (start, kind, name) = p.1
+    let end = match list.get(starts, p.0 + 1) { some((next, _, _)) => next - 1, none => total }
+    Sym { kind: kind, name: name, start: start, end: trim_end(lines, start, end) }
+  })
+}
+
+// ── brace / indent languages ──────────────────────────────────────────────
+// Declaration patterns per language: (kind, regex, index of the group holding the name).
+// Plain groups only: Almide's regex reports a slot for `(?:…)` too (almide/almide issue), so
+// indexes are counted over every group.
+fn rules_for(lang: String) -> List[(String, String, Int)] = {
+  let id = "[A-Za-z_][A-Za-z0-9_]*"
+  let vis = "^(pub(\\([a-z]+\\))? )?"
+  if lang == "rust" then [
+    ("fn", vis + "(async )?(unsafe )?(const )?fn (" + id + ")", 6),
+    ("struct", vis + "struct (" + id + ")", 3),
+    ("enum", vis + "enum (" + id + ")", 3),
+    ("trait", vis + "trait (" + id + ")", 3),
+    ("impl", "^impl(<[^>]*>)? .* for (" + id + ")", 2),
+    ("impl", "^impl(<[^>]*>)? (" + id + ")", 2),
+    ("mod", vis + "mod (" + id + ")", 3),
+    ("type", vis + "type (" + id + ")", 3),
+    ("macro", "^macro_rules! (" + id + ")", 1),
+  ]
+  else if lang == "go" then [
+    ("func", "^func (\\([^)]*\\) )?(" + id + ")", 2),
+    ("type", "^type (" + id + ")", 1),
+  ]
+  else if lang == "typescript" or lang == "javascript" then [
+    ("function", "^(export )?(default )?(async )?function\\*? (" + id + ")", 4),
+    ("class", "^(export )?(default )?(abstract )?class (" + id + ")", 4),
+    ("interface", "^(export )?interface (" + id + ")", 2),
+    ("type", "^(export )?type (" + id + ")", 2),
+    ("enum", "^(export )?(const )?enum (" + id + ")", 3),
+    ("const", "^(export )?(const|let|var) (" + id + ") *(:[^=]*)?= *(async )?(\\(|function|[A-Za-z_][A-Za-z0-9_]* *=>)", 3),
+    ("method", "^(public |private |protected )?(static )?(async )?(" + id + ")\\([^)]*\\) *(:[^{]*)?\\{", 4),
+  ]
+  else if lang == "python" then [
+    ("def", "^(async )?def (" + id + ")", 2),
+    ("class", "^class (" + id + ")", 1),
+  ]
+  else []
+}
+
+// (kind, name) if this line starts a declaration we want in the outline.
+fn decl_of(lang: String, line: String) -> Option[(String, String)] = {
+  let t = string.trim(line)
+  list.fold(rules_for(lang), none, (acc, r) => match acc {
+    some(x) => some(x),
+    none => match regex.captures(r.1, t) {
+      some(cs) => match list.get(cs, r.2) { some(n) => if n == "" then none else some((r.0, n)), none => none },
+      none => none,
+    },
+  })
+}
+
+fn indent_of(line: String) -> Int = string.len(line) - string.len(string.trim_start(line))
+
+// End line of a brace-delimited block starting at `start` (1-based). If the declaration line
+// has no `{` before a `;` (a prototype, a type alias), it is a one-liner.
+fn brace_end(lines: List[String], start: Int) -> Int = {
+  let total = list.len(lines)
+  var depth = 0
+  var seen_open = false
+  var i = start
+  var found = 0
+  while found == 0 and i <= total {
+    let l = list.get(lines, i - 1) ?? ""
+    let code = strip_strings_and_comments(l)
+    if not seen_open and string.contains(code, ";") and not string.contains(code, "{") then found = i
+    else {
+      for ch in string.chars(code) {
+        if ch == "{" then { depth = depth + 1; seen_open = true }
+        else if ch == "}" then depth = depth - 1
+        else ()
+      }
+      if seen_open and depth <= 0 then found = i else i = i + 1
+    }
+  }
+  if found == 0 then total else found
+}
+
+// Remove string literals and line comments so braces inside them do not count. Approximate.
+fn strip_strings_and_comments(line: String) -> String = {
+  var out = ""
+  var in_str = ""
+  var prev = ""
+  var done = false
+  for ch in string.chars(line) {
+    if done then ()
+    else if in_str != "" then { if ch == in_str and prev != "\\" then in_str = "" else () }
+    else if ch == "\"" or ch == "'" or ch == "`" then in_str = ch
+    else if ch == "/" and prev == "/" then { out = string.drop_end(out, 1); done = true }
+    else if ch == "#" then done = true
+    else out = out + ch
+    prev = ch
+  }
+  out
+}
+
+fn indent_end(lines: List[String], start: Int) -> Int = {
+  let total = list.len(lines)
+  let base = indent_of(list.get(lines, start - 1) ?? "")
+  var i = start + 1
+  var last = start
+  var go = true
+  while go and i <= total {
+    let l = list.get(lines, i - 1) ?? ""
+    if string.trim(l) == "" then i = i + 1
+    else if indent_of(l) > base then { last = i; i = i + 1 }
+    else go = false
+  }
+  last
+}
+
+fn generic_outline(lang: String, lines: List[String]) -> List[Sym] = {
+  let starts = list.enumerate(lines) |> list.filter_map((p) => match decl_of(lang, p.1) {
+    some((kind, name)) => some((p.0 + 1, kind, name)),
+    none => none,
+  })
+  list.map(starts, (s) => {
+    let (start, kind, name) = s
+    let end = if lang == "python" then indent_end(lines, start) else brace_end(lines, start)
+    Sym { kind: kind, name: name, start: start, end: end }
+  })
+}
+
+// Nested symbols get their parent's name prefixed (impl Foo { fn bar } → Foo::bar).
+fn qualify(lang: String, syms: List[Sym]) -> List[Sym] = {
+  let sep = if lang == "rust" then "::" else "."
+  list.map(syms, (s) => {
+    let parents = list.filter(syms, (p) => p.start < s.start and p.end >= s.end and (p.kind == "impl" or p.kind == "class" or p.kind == "mod" or p.kind == "trait"))
+    match list.last(parents) {
+      some(p) => if p.kind == "impl" or p.kind == "class" or p.kind == "trait" then Sym { ...s, name: p.name + sep + s.name } else s,
+      none => s,
+    }
+  })
+}
+
+// ── helper (tree-sitter) ─────────────────────────────────────────────────
+fn from_json(text: String) -> Result[Outline, String] = {
+  let j = json.parse(text)!
+  ok(Outline {
+    lang: json.get_string(j, "lang") ?? "unknown",
+    total_lines: json.get_int(j, "total_lines") ?? 0,
+    symbols: list.map(json.get_array(j, "symbols") ?? [], (s) => Sym {
+      kind: json.get_string(s, "kind") ?? "", name: json.get_string(s, "name") ?? "",
+      start: json.get_int(s, "start") ?? 0, end: json.get_int(s, "end") ?? 0,
+    }),
+  })
+}
+
+effect fn via_helper(path: String) -> Option[Outline] = match process.exec_status_timeout(HELPER, [path], 3000) {
+  ok(st) => if st.code == 0 then (match from_json(st.stdout) { ok(o) => some(o), err(_) => none }) else none,
+  err(_) => none,
+}
+
+// ── entry points ──────────────────────────────────────────────────────────
+fn of_lines(lang: String, lines: List[String]) -> Outline = {
+  let syms = if lang == "almide" then almd_outline(lines) else qualify(lang, generic_outline(lang, lines))
+  Outline { lang: lang, total_lines: list.len(lines), symbols: syms }
+}
+
+effect fn of_file(path: String, lines: List[String]) -> Outline = {
+  let lang = lang_of(path)
+  if lang == "almide" or lang == "text" then of_lines(lang, lines)
+  else match via_helper(path) ?? none {
+    some(o) => o,
+    none => of_lines(lang, lines),
+  }
+}
+
+// Exact name first, then a suffix match so `compile` finds `Compiler::compile`.
+fn find(o: Outline, name: String) -> Option[Sym] =
+  match list.find(o.symbols, (s) => s.name == name) {
+    some(s) => some(s),
+    none => list.find(o.symbols, (s) => string.ends_with(s.name, "::" + name) or string.ends_with(s.name, "." + name)),
+  }
+
+// Innermost symbol containing line `n`.
+fn enclosing(o: Outline, n: Int) -> Option[Sym] = {
+  let inside = list.filter(o.symbols, (s) => s.start <= n and n <= s.end)
+  list.fold(inside, none, (best, s) => match best {
+    none => some(s),
+    some(b) => if s.end - s.start < b.end - b.start then some(s) else some(b),
+  })
+}
+
+fn pad_right(s: String, width: Int) -> String =
+  if string.len(s) >= width then s else s + string.repeat(" ", width - string.len(s))
+
+fn render(o: Outline, max: Int) -> List[String] = {
+  let shown = list.take(o.symbols, max)
+  let rows = list.map(shown, (s) => "  ${pad_right(s.kind, 9)} ${pad_right(s.name, 40)} L${int.to_string(s.start)}-${int.to_string(s.end)}")
+  if list.len(o.symbols) > max then rows + ["  … ${int.to_string(list.len(o.symbols) - max)} more (--max N)"] else rows
+}
+
+test "rust outline finds fns, impl methods and ranges" {
+  let src = "pub struct Foo {\n  x: i32,\n}\n\nimpl Foo {\n    pub fn new() -> Foo {\n        Foo { x: 1 }\n    }\n    fn get(&self) -> i32 { self.x }\n}\n\nfn free() {\n    let s = \"}\";\n}\n"
+  let o = of_lines("rust", string.lines(src))
+  let names = list.map(o.symbols, (s) => s.name)
+  assert(list.contains(names, "Foo::new"))
+  assert(list.contains(names, "Foo::get"))
+  assert(list.contains(names, "free"))
+  let f = find(o, "free") ?? Sym { kind: "", name: "", start: 0, end: 0 }
+  assert_eq(f.start, 12)
+  assert_eq(f.end, 14)
+  let n = find(o, "new") ?? Sym { kind: "", name: "", start: 0, end: 0 }
+  assert_eq(n.start, 6)
+  assert_eq(n.end, 8)
+}
+
+test "python outline uses indentation" {
+  let src = "class A:\n    def m(self):\n        return 1\n\n    def n(self):\n        pass\n\ndef top():\n    pass\n"
+  let o = of_lines("python", string.lines(src))
+  let m = find(o, "m") ?? Sym { kind: "", name: "", start: 0, end: 0 }
+  assert_eq(m.name, "A.m")
+  assert_eq(m.end, 3)
+  let a = find(o, "A") ?? Sym { kind: "", name: "", start: 0, end: 0 }
+  assert_eq(a.end, 6)
+}
+
+test "almd outline and enclosing" {
+  let src = "fn a() -> Int = 1\n\neffect fn b() -> Unit = {\n  println(\"x\")\n}\n\ntest \"t1\" {\n  assert(true)\n}\n"
+  let o = of_lines("almide", string.lines(src))
+  assert_eq(list.len(o.symbols), 3)
+  assert_eq((enclosing(o, 4) ?? Sym { kind: "", name: "?", start: 0, end: 0 }).name, "b")
+}
+
+test "go and typescript declarations" {
+  let g = of_lines("go", string.lines("package x\n\nfunc (s *S) Run() error {\n\treturn nil\n}\n\ntype S struct {\n\tA int\n}\n"))
+  assert(list.contains(list.map(g.symbols, (s) => s.name), "Run"))
+  let t = of_lines("typescript", string.lines("export const f = async (x: number) => {\n  return x\n}\nexport function g() {}\nclass C {\n  m() { return 1 }\n}\n"))
+  let names = list.map(t.symbols, (s) => s.name)
+  assert(list.contains(names, "f"))
+  assert(list.contains(names, "g"))
+  assert(list.contains(names, "C.m"))
+}

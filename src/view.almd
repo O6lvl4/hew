@@ -1,0 +1,96 @@
+// view — how a slice of a file is shown to a model.
+//
+// Every line is numbered so the model can come back with `--lines A-B`, long lines are clipped,
+// gaps are marked explicitly, and the header says how big the whole file is. Pure; no IO.
+
+import regex
+
+let CLIP = 200
+
+fn clip(line: String, max: Int) -> String =
+  if string.len(line) > max then string.take(line, max) + " …" else line
+
+fn pad_left(s: String, width: Int) -> String =
+  if string.len(s) >= width then s else string.repeat(" ", width - string.len(s)) + s
+
+fn digits(n: Int) -> Int = string.len(int.to_string(n))
+
+fn human(n: Int) -> String =
+  if n >= 1_048_576 then "${int.to_string(n / 1_048_576)}.${int.to_string((n % 1_048_576) * 10 / 1_048_576)} MB"
+  else if n >= 1024 then "${int.to_string(n / 1024)} KB"
+  else "${int.to_string(n)} B"
+
+// A window is an inclusive 1-based line range plus an optional note (the enclosing symbol).
+type Window = { start: Int, end: Int, note: String }
+
+fn clamp(w: Window, total: Int) -> Window =
+  Window { ...w, start: int.max(1, w.start), end: int.min(total, w.end) }
+
+// Merge overlapping / touching windows, keeping the first note.
+fn merge(ws: List[Window]) -> List[Window] = {
+  let sorted = list.sort_by(ws, (w) => w.start)
+  var out: List[Window] = []
+  for w in sorted {
+    match list.last(out) {
+      some(prev) => if w.start <= prev.end + 1
+        then out = list.drop_end(out, 1) + [Window { start: prev.start, end: int.max(prev.end, w.end), note: if prev.note == "" then w.note else prev.note }]
+        else list.push(out, w),
+      none => list.push(out, w),
+    }
+  }
+  out
+}
+
+// Render windows of `lines` (the whole file) with numbers and gap markers.
+fn render_windows(lines: List[String], ws: List[Window], clip_at: Int) -> List[String] = {
+  let total = list.len(lines)
+  let width = digits(total)
+  var out: List[String] = []
+  var cursor = 1
+  for w0 in merge(list.map(ws, (w) => clamp(w, total))) {
+    let w = w0
+    if w.start > cursor then list.push(out, "${string.repeat(" ", width)}   ⋮  (${int.to_string(w.start - cursor)} lines)") else ()
+    if w.note != "" then list.push(out, "${string.repeat(" ", width)} ── ${w.note} ──") else ()
+    var i = w.start
+    while i <= w.end {
+      list.push(out, "${pad_left(int.to_string(i), width)}│ ${clip(list.get(lines, i - 1) ?? "", clip_at)}")
+      i = i + 1
+    }
+    cursor = w.end + 1
+  }
+  if cursor <= total then list.push(out, "${string.repeat(" ", width)}   ⋮  (${int.to_string(total - cursor + 1)} lines)") else ()
+  out
+}
+
+fn header(path: String, total: Int, bytes: Int) -> String =
+  "# ${path}  (${int.to_string(total)} lines, ${human(bytes)})"
+
+fn footer(shown_lines: Int, shown_bytes: Int) -> String =
+  "# shown: ${int.to_string(shown_lines)} lines, ${human(shown_bytes)}"
+
+// Lines matching `pat`, each expanded by `around` lines on both sides.
+fn grep_windows(lines: List[String], pat: String, around: Int) -> List[Window] =
+  list.enumerate(lines)
+    |> list.filter((p) => regex.is_match(pat, p.1))
+    |> list.map((p) => Window { start: p.0 + 1 - around, end: p.0 + 1 + around, note: "" })
+
+test "merge joins touching windows" {
+  let ws = merge([Window { start: 10, end: 12, note: "" }, Window { start: 13, end: 15, note: "b" }, Window { start: 30, end: 31, note: "" }])
+  assert_eq(list.len(ws), 2)
+  assert_eq((list.first(ws) ?? Window { start: 0, end: 0, note: "" }).end, 15)
+  assert_eq((list.first(ws) ?? Window { start: 0, end: 0, note: "" }).note, "b")
+}
+
+test "render marks gaps and numbers lines" {
+  let lines = list.range(1, 21) |> list.map((i) => "line ${int.to_string(i)}")
+  let out = render_windows(lines, [Window { start: 3, end: 4, note: "" }, Window { start: 18, end: 19, note: "fn x" }], 200)
+  assert(string.contains(list.join(out, "\n"), "⋮  (2 lines)"))
+  assert(string.contains(list.join(out, "\n"), " 3│ line 3"))
+  assert(string.contains(list.join(out, "\n"), "── fn x ──"))
+  assert(string.contains(list.join(out, "\n"), "⋮  (1 lines)"))
+}
+
+test "clip and human" {
+  assert_eq(clip("abcdef", 3), "abc …")
+  assert_eq(human(2048), "2 KB")
+}
