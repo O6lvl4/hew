@@ -87,7 +87,14 @@ almide install github.com/O6lvl4/peek      # one native binary → ~/.local/bin/
 One binary, no runtime, no other tools required. Optionally, `PEEK_OUTLINE_BIN=<program>`
 names an outline provider (called with a path, must print
 `{"lang","total_lines","symbols":[{"kind","name","start","end"}]}`); when set, its answer is
-used for `--symbol`, `outline` and grep labels.
+used for `--symbol`, `outline` and grep labels, for any language it knows. One such provider is
+[`ctxgate-outline`](https://github.com/O6lvl4/ctxgate/tree/main/tools/ctxgate-outline)
+(tree-sitter: Rust, Go, TypeScript/TSX, Python, C, C++, Java, Ruby, C#, PHP, Bash, Lua, Kotlin,
+Swift, Scala):
+
+```bash
+export PEEK_OUTLINE_BIN=ctxgate-outline
+```
 
 ## Teach your agent
 

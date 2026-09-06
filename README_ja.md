@@ -83,8 +83,15 @@ almide install github.com/O6lvl4/peek      # ネイティブバイナリが 1 �
 
 バイナリ 1 つ、ランタイムなし、他のツールも不要です。任意で `PEEK_OUTLINE_BIN=<プログラム>` に
 目次プログラムを指定できます（パスを引数に受け取り、
-`{"lang","total_lines","symbols":[{"kind","name","start","end"}]}` を出力するもの）。指定すると
-`--symbol`、`outline`、grep のラベルにその結果が使われます。
+`{"lang","total_lines","symbols":[{"kind","name","start","end"}]}` を出力するもの）。指定すると、
+そのプログラムが知っている言語すべてで、`--symbol`、`outline`、grep のラベルにその結果が使われます。
+たとえば [`ctxgate-outline`](https://github.com/O6lvl4/ctxgate/tree/main/tools/ctxgate-outline)
+（tree-sitter: Rust, Go, TypeScript/TSX, Python, C, C++, Java, Ruby, C#, PHP, Bash, Lua, Kotlin,
+Swift, Scala）:
+
+```bash
+export PEEK_OUTLINE_BIN=ctxgate-outline
+```
 
 ## エージェントに教える
 
