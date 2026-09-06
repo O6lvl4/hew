@@ -85,12 +85,8 @@ almide install github.com/O6lvl4/peek      # ネイティブバイナリが 1 �
 目次プログラムを指定できます（パスを引数に受け取り、
 `{"lang","total_lines","symbols":[{"kind","name","start","end"}]}` を出力するもの）。指定すると、
 そのプログラムが知っている言語すべてで、`--symbol`、`outline`、grep のラベルにその結果が使われます。
-たとえば [`ctxgate-outline`](https://github.com/O6lvl4/ctxgate/tree/main/tools/ctxgate-outline)
-（tree-sitter: 専用ルール付きの 16 言語と、初回使用時にダウンロードされる 371 言語）:
-
-```bash
-export PEEK_OUTLINE_BIN=ctxgate-outline
-```
+この契約で話せる tree-sitter 系のツールなら何でも差し込めます。peek 自体は特定のものを知りませんし、
+必要ともしません。
 
 ## エージェントに教える
 
@@ -136,13 +132,5 @@ peek tree <dir> [--depth N]
 
 すべて内蔵です。`PEEK_OUTLINE_BIN` で外部の目次プログラムを指定した場合は、その JSON の結果が
 内蔵ルールの代わりに使われます。
-
-## ctxgate との関係
-
-[ctxgate](https://github.com/O6lvl4/ctxgate) はツール呼び出しの *出力* 側で働きます。返ってきた
-ものを vault に保存し、必要なら絞る。それを計測して分かったのは、モデルが頼んでいない要約は
-ターンを増やしがちで、いちばん良いセッションはエージェントが自分で読む範囲を絞っていた
-セッションだった、ということでした。`peek` はその絞り込みを、きちんとやるための道具です。
-両方使ってください。ctxgate は安全網、`peek` は入口です。
 
 [Almide](https://github.com/almide/almide) 製。MIT / Apache-2.0 のデュアルライセンス。

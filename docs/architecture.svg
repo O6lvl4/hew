@@ -101,5 +101,5 @@
   <text x="20" y="480" class="s">2. Every line is numbered so the next call can be `--lines A-B`. Gaps say how many lines were skipped.</text>
   <text x="20" y="498" class="s">3. Say where things are: the header has the file size, grep hits name their enclosing symbol, `--symbol` errors suggest names.</text>
   <text x="20" y="516" class="s">4. Bounded output: clipped lines, per-file and total caps on grep, 40 files per directory in tree.</text>
-  <text x="20" y="540" class="s">peek depends on nothing. ctxgate (github.com/O6lvl4/ctxgate) can sit on the output side of a tool call; peek is the input side.</text>
+  <text x="20" y="540" class="s">peek depends on nothing and knows nothing downstream. Output-side tools (vaults, budgets, hooks) can build on it, not the other way round.</text>
 </svg>

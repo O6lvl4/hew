@@ -87,13 +87,8 @@ almide install github.com/O6lvl4/peek      # one native binary → ~/.local/bin/
 One binary, no runtime, no other tools required. Optionally, `PEEK_OUTLINE_BIN=<program>`
 names an outline provider (called with a path, must print
 `{"lang","total_lines","symbols":[{"kind","name","start","end"}]}`); when set, its answer is
-used for `--symbol`, `outline` and grep labels, for any language it knows. One such provider is
-[`ctxgate-outline`](https://github.com/O6lvl4/ctxgate/tree/main/tools/ctxgate-outline)
-(tree-sitter: 16 languages with dedicated rules, and 371 more downloaded on first use):
-
-```bash
-export PEEK_OUTLINE_BIN=ctxgate-outline
-```
+used for `--symbol`, `outline` and grep labels, for any language it knows. Any tree-sitter
+based tool that speaks this contract can be plugged in; peek itself does not know or need any.
 
 ## Teach your agent
 
@@ -139,13 +134,5 @@ composes three modules:
 
 Everything is built in. `PEEK_OUTLINE_BIN` can name an external outline program whose JSON
 answer replaces the built-in rules.
-
-## Relationship to ctxgate
-
-[ctxgate](https://github.com/O6lvl4/ctxgate) works on the *output* side of a tool call:
-it vaults and squeezes what came back. Measuring it showed that a summary the model did not
-ask for often costs a turn, and that the best sessions were the ones where the agent
-narrowed its reads itself. `peek` is that narrowing, done well. Use both: ctxgate as the
-safety net, `peek` as the way in.
 
 Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apache-2.0.
