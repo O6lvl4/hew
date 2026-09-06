@@ -89,8 +89,7 @@ names an outline provider (called with a path, must print
 `{"lang","total_lines","symbols":[{"kind","name","start","end"}]}`); when set, its answer is
 used for `--symbol`, `outline` and grep labels, for any language it knows. One such provider is
 [`ctxgate-outline`](https://github.com/O6lvl4/ctxgate/tree/main/tools/ctxgate-outline)
-(tree-sitter: Rust, Go, TypeScript/TSX, Python, C, C++, Java, Ruby, C#, PHP, Bash, Lua, Kotlin,
-Swift, Scala):
+(tree-sitter: 16 languages with dedicated rules, and 371 more downloaded on first use):
 
 ```bash
 export PEEK_OUTLINE_BIN=ctxgate-outline

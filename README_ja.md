@@ -86,8 +86,7 @@ almide install github.com/O6lvl4/peek      # ネイティブバイナリが 1 �
 `{"lang","total_lines","symbols":[{"kind","name","start","end"}]}` を出力するもの）。指定すると、
 そのプログラムが知っている言語すべてで、`--symbol`、`outline`、grep のラベルにその結果が使われます。
 たとえば [`ctxgate-outline`](https://github.com/O6lvl4/ctxgate/tree/main/tools/ctxgate-outline)
-（tree-sitter: Rust, Go, TypeScript/TSX, Python, C, C++, Java, Ruby, C#, PHP, Bash, Lua, Kotlin,
-Swift, Scala）:
+（tree-sitter: 専用ルール付きの 16 言語と、初回使用時にダウンロードされる 371 言語）:
 
 ```bash
 export PEEK_OUTLINE_BIN=ctxgate-outline
