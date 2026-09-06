@@ -77,8 +77,8 @@
   <path d="M720,178 L720,266 L758,266" class="arrow"/>
   <text x="700" y="145" text-anchor="middle" class="l">uses</text>
 
-  <text x="760" y="340" class="s">Everything above is built in: one binary, no runtime, no other tools.</text>
-  <text x="760" y="356" class="s">PEEK_OUTLINE_BIN may name an external outline program (JSON contract).</text>
+  <text x="760" y="340" class="s">All built in: one binary, no runtime, no other tools.</text>
+  <text x="760" y="356" class="s">PEEK_OUTLINE_BIN: optional external outline program.</text>
 
   <!-- output -->
   <rect x="20" y="200" width="440" height="200" class="box"/>
