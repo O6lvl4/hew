@@ -208,7 +208,7 @@ fn from_json(text: String) -> Result[Outline, String] = {
   })
 }
 
-effect fn via_helper(path: String) -> Option[Outline] = match env.get("PEEK_OUTLINE_BIN") {
+effect fn via_helper(provider: Option[String], path: String) -> Option[Outline] = match provider {
   none => none,
   some(bin) => match process.exec_status_timeout(bin, [path], 3000) {
     ok(st) => if st.code == 0 then (match from_json(st.stdout) { ok(o) => some(o), err(_) => none }) else none,
@@ -222,14 +222,18 @@ fn of_lines(lang: String, lines: List[String]) -> Outline = {
   Outline { lang: lang, total_lines: list.len(lines), symbols: syms }
 }
 
-effect fn of_file(path: String, lines: List[String]) -> Outline = {
+// Outline of a file. `provider` is an optional external outline program (the PEEK_OUTLINE_BIN
+// contract: called with the path, prints the outline JSON); it may know languages we do not.
+effect fn of_file_with(path: String, lines: List[String], provider: Option[String]) -> Outline = {
   let lang = lang_of(path)
   if lang == "almide" then of_lines(lang, lines)
-  else match via_helper(path) ?? none {     // the external provider may know languages we do not
+  else match via_helper(provider, path) ?? none {
     some(o) => o,
     none => of_lines(lang, lines),
   }
 }
+
+effect fn of_file(path: String, lines: List[String]) -> Outline = of_file_with(path, lines, env.get("PEEK_OUTLINE_BIN"))
 
 // Exact name first, then a suffix match so `compile` finds `Compiler::compile`.
 fn find(o: Outline, name: String) -> Option[Sym] =
