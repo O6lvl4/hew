@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="560" viewBox="0 0 1100 560" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="560" viewBox="0 0 1040 560" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#3b3b3b"/>
@@ -20,7 +20,7 @@
     .arrowb { stroke:#1f6feb; stroke-width:1.4; fill:none; marker-end:url(#ab); stroke-dasharray:5 4; }
     .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; fill:#1f1f1f; }
   </style>
-  <rect x="0" y="0" width="1100" height="560" fill="#ffffff"/>
+  <rect x="0" y="0" width="1040" height="560" fill="#ffffff"/>
   <text x="20" y="30" class="h" font-size="16">peek — one call, exactly what was asked for</text>
 
   <!-- agent -->
@@ -77,13 +77,8 @@
   <path d="M720,178 L720,266 L758,266" class="arrow"/>
   <text x="700" y="145" text-anchor="middle" class="l">uses</text>
 
-  <!-- helper -->
-  <rect x="760" y="320" width="260" height="56" class="ext"/>
-  <text x="890" y="342" text-anchor="middle" class="h">ctxgate-outline  (optional)</text>
-  <text x="890" y="360" text-anchor="middle" class="s">tree-sitter, used when on PATH</text>
-  <path d="M1020,200 L1050,200 L1050,348 L1022,348" class="arrowb"/>
-  <text x="1056" y="270" class="lb" text-anchor="start">rs go</text>
-  <text x="1056" y="284" class="lb" text-anchor="start">ts py</text>
+  <text x="760" y="340" class="s">Everything above is built in: one binary, no runtime, no other tools.</text>
+  <text x="760" y="356" class="s">PEEK_OUTLINE_BIN may name an external outline program (JSON contract).</text>
 
   <!-- output -->
   <rect x="20" y="200" width="440" height="200" class="box"/>
@@ -106,5 +101,5 @@
   <text x="20" y="480" class="s">2. Every line is numbered so the next call can be `--lines A-B`. Gaps say how many lines were skipped.</text>
   <text x="20" y="498" class="s">3. Say where things are: the header has the file size, grep hits name their enclosing symbol, `--symbol` errors suggest names.</text>
   <text x="20" y="516" class="s">4. Bounded output: clipped lines, per-file and total caps on grep, 40 files per directory in tree.</text>
-  <text x="20" y="540" class="s">ctxgate (github.com/O6lvl4/ctxgate) works on the output side of a tool call; peek is the input side. Use both.</text>
+  <text x="20" y="540" class="s">peek depends on nothing. ctxgate (github.com/O6lvl4/ctxgate) can sit on the output side of a tool call; peek is the input side.</text>
 </svg>

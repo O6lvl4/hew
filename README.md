@@ -25,9 +25,9 @@ model has to find first, `grep -n` results say nothing about *where* a match is)
 does the narrowing properly, once, in one binary:
 
 - **Structure-aware.** `--symbol` cuts out a function, type, class, impl method or test by
-  name. Almide, Rust, Go, TypeScript/JavaScript and Python are parsed built in; when
-  [`ctxgate-outline`](https://github.com/O6lvl4/ctxgate) (tree-sitter) is on PATH it is used
-  for those languages instead.
+  name. Almide, Rust, Go, TypeScript/JavaScript and Python are parsed built in, with no
+  dependencies. An external outline program can be plugged in with `PEEK_OUTLINE_BIN` if you
+  want tree-sitter accuracy.
 - **Numbered and sized.** Every line carries its number so the next call can be
   `--lines A-B`. Long lines are clipped. Gaps are marked with how many lines were skipped.
   The header says how big the whole file is; the footer says how much was shown.
@@ -84,12 +84,10 @@ $ peek src/lower.rs --grep "Expr::Match" --around 2
 almide install github.com/O6lvl4/peek      # one native binary → ~/.local/bin/peek
 ```
 
-Optional, for tree-sitter-accurate outlines of Rust / Go / TypeScript / Python:
-
-```bash
-git clone https://github.com/O6lvl4/ctxgate && cd ctxgate/tools/ctxgate-outline
-cargo build --release && cp target/release/ctxgate-outline ~/.local/bin/
-```
+One binary, no runtime, no other tools required. Optionally, `PEEK_OUTLINE_BIN=<program>`
+names an outline provider (called with a path, must print
+`{"lang","total_lines","symbols":[{"kind","name","start","end"}]}`); when set, its answer is
+used for `--symbol`, `outline` and grep labels.
 
 ## Teach your agent
 
@@ -133,8 +131,8 @@ composes three modules:
 - **search** — walks directories (skipping vcs / build / deps / binaries), groups matches per
   file, folds identical lines, applies caps, and asks outline for the enclosing symbol.
 
-When `ctxgate-outline` (tree-sitter) is on PATH, Rust / Go / TS / Python outlines come from
-it; otherwise the built-in rules are used.
+Everything is built in. `PEEK_OUTLINE_BIN` can name an external outline program whose JSON
+answer replaces the built-in rules.
 
 ## Relationship to ctxgate
 

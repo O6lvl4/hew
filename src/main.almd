@@ -25,8 +25,8 @@ fn usage() -> String = """peek ${VERSION} — read code the way a model should
   peek tree <dir> [--depth N]
 
 Output is numbered so you can come back with --lines; long lines are clipped; gaps are marked.
---symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python (tree-sitter via
-ctxgate-outline when installed)."""
+--symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Set PEEK_OUTLINE_BIN to an
+external outline program (a path in, the outline JSON out) to override those."""
 
 // ── tiny arg parser ───────────────────────────────────────────────────────
 fn opt(args: List[String], name: String) -> Option[String] =

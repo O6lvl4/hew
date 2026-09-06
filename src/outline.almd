@@ -3,15 +3,17 @@
 //   .almd              parsed here (top-level fn / effect fn / type / protocol / let / test)
 //   rust go ts js py   parsed here from declaration lines; ranges by brace matching (or
 //                      indentation for Python). Good enough to cut a symbol out of a file.
-//   anything, when `ctxgate-outline` (tree-sitter) is on PATH: that wins for those languages.
+//   Optionally, PEEK_OUTLINE_BIN names an external program (e.g. a tree-sitter one) that
+//   prints {"lang","total_lines","symbols":[{"kind","name","start","end"}]} for a path; when
+//   set, its answer wins. peek itself depends on nothing.
 import json
 import regex
 import process
+import env
 
 type Sym = { kind: String, name: String, start: Int, end: Int }
 type Outline = { lang: String, total_lines: Int, symbols: List[Sym] }
 
-let HELPER = "ctxgate-outline"
 
 fn lang_of(path: String) -> String =
   if string.ends_with(path, ".almd") then "almide"
@@ -206,9 +208,12 @@ fn from_json(text: String) -> Result[Outline, String] = {
   })
 }
 
-effect fn via_helper(path: String) -> Option[Outline] = match process.exec_status_timeout(HELPER, [path], 3000) {
-  ok(st) => if st.code == 0 then (match from_json(st.stdout) { ok(o) => some(o), err(_) => none }) else none,
-  err(_) => none,
+effect fn via_helper(path: String) -> Option[Outline] = match env.get("PEEK_OUTLINE_BIN") {
+  none => none,
+  some(bin) => match process.exec_status_timeout(bin, [path], 3000) {
+    ok(st) => if st.code == 0 then (match from_json(st.stdout) { ok(o) => some(o), err(_) => none }) else none,
+    err(_) => none,
+  },
 }
 
 // ── entry points ──────────────────────────────────────────────────────────

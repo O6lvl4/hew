@@ -24,8 +24,8 @@ peek tree src --depth 2                             ディレクトリ。vcs / b
 1 つのバイナリで、正しく、1 回で行います。
 
 - **構造を知っている。** `--symbol` で関数・型・クラス・impl のメソッド・テストを名前で切り出せます。
-  Almide、Rust、Go、TypeScript/JavaScript、Python は内蔵パーサで扱い、
-  [`ctxgate-outline`](https://github.com/O6lvl4/ctxgate)（tree-sitter）が PATH にあればそちらを使います。
+  Almide、Rust、Go、TypeScript/JavaScript、Python は内蔵パーサで扱い、外部依存はありません。
+  tree-sitter の精度が欲しければ `PEEK_OUTLINE_BIN` で外部の目次プログラムを差し込めます。
 - **番号とサイズが付く。** 全行に行番号が付くので、次の呼び出しは `--lines A-B` で済みます。
   長い行は切り詰め、飛ばした箇所には飛ばした行数を示します。ヘッダにはファイル全体の大きさ、
   フッタには見せた量が出ます。
@@ -81,12 +81,10 @@ $ peek src/lower.rs --grep "Expr::Match" --around 2
 almide install github.com/O6lvl4/peek      # ネイティブバイナリが 1 つ → ~/.local/bin/peek
 ```
 
-任意で、Rust / Go / TypeScript / Python の目次を tree-sitter の精度にしたい場合:
-
-```bash
-git clone https://github.com/O6lvl4/ctxgate && cd ctxgate/tools/ctxgate-outline
-cargo build --release && cp target/release/ctxgate-outline ~/.local/bin/
-```
+バイナリ 1 つ、ランタイムなし、他のツールも不要です。任意で `PEEK_OUTLINE_BIN=<プログラム>` に
+目次プログラムを指定できます（パスを引数に受け取り、
+`{"lang","total_lines","symbols":[{"kind","name","start","end"}]}` を出力するもの）。指定すると
+`--symbol`、`outline`、grep のラベルにその結果が使われます。
 
 ## エージェントに教える
 
@@ -130,8 +128,8 @@ peek tree <dir> [--depth N]
 - **search** — ディレクトリを歩き（vcs / build / 依存 / バイナリは除外）、マッチをファイルごとに
   まとめ、同一行を畳み、上限をかけ、outline で囲んでいるシンボルを付ける。
 
-`ctxgate-outline`（tree-sitter）が PATH にあれば、Rust / Go / TS / Python の目次はそちらの結果を
-優先します。なければ内蔵のルール表で動きます。
+すべて内蔵です。`PEEK_OUTLINE_BIN` で外部の目次プログラムを指定した場合は、その JSON の結果が
+内蔵ルールの代わりに使われます。
 
 ## ctxgate との関係
 
