@@ -8,6 +8,7 @@
 //   peek outline <file|dir> [--max N]    symbol table
 //   peek grep RE [path...] [--per-file N] [--max-files N]
 //   peek tree <dir> [--depth N]
+//   peek init [--global]                 write the how-to-read-code note into CLAUDE.md
 import fs
 import env
 import process
@@ -23,6 +24,7 @@ fn usage() -> String = """peek ${VERSION} — read code the way a model should
   peek outline <file|dir> [--max N]
   peek grep <RE> [path...] [--per-file N] [--max-files N]
   peek tree <dir> [--depth N]
+  peek init [--global]                 add the note that tells an agent to read code with peek to CLAUDE.md
 
 Output is numbered so you can come back with --lines; long lines are clipped; gaps are marked.
 --symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Set PEEK_OUTLINE_BIN to an
@@ -171,6 +173,44 @@ effect fn tree_dir(dir: String, indent: String, level: Int, max_depth: Int) -> R
   ok(())
 }
 
+// ── peek init ─────────────────────────────────────────────────────────────
+// Agents read CLAUDE.md at session start; a short, imperative block there is what makes them
+// reach for peek instead of cat / sed -n / awk. Kept between markers so re-running replaces it.
+let NOTE_BEGIN = "<!-- peek:begin -->"
+let NOTE_END = "<!-- peek:end -->"
+let NOTE = """
+<!-- peek:begin -->
+## Reading code: use `peek`
+Do not read source with `cat`, `sed -n`, `awk '/…/,/…/'` or `head`/`tail` pipelines. `peek` returns
+exactly the part you ask for, numbered, with the file's size and the enclosing symbol, in one call:
+- `peek <file> --symbol NAME`            one function / type / method by name (Almide, Rust, Go, TS/JS, Python, and more via a provider)
+- `peek <file> --grep RE [--around N]`   matching lines with context, labelled by the enclosing function
+- `peek <file> --lines A-B`              a range; the output is numbered so you can narrow further
+- `peek outline <file|dir>`              what is in a file before you read it
+- `peek grep RE [path]`                  search that folds repeats and names the enclosing symbol
+- `peek tree <dir>`                      a directory without vcs / build / dependency noise
+Read a whole file only when you need all of it: `peek <file>`.
+<!-- peek:end -->
+"""
+
+effect fn cmd_init(global: Bool) -> Result[Unit, String] = {
+  let path = if global then "${env.get("HOME") ?? "."}/.claude/CLAUDE.md" else "${env.cwd()!}/CLAUDE.md"
+  let current = match fs.read_text_if_exists(path) { ok(some(t)) => t, _ => "" }
+  let block = string.trim(NOTE)
+  let next = match string.index_of(current, NOTE_BEGIN) {
+    some(a) => match string.index_of(current, NOTE_END) {
+      some(b) => string.slice(current, 0, a) + block + string.drop(current, b + string.len(NOTE_END)),
+      none => current + "\n" + block + "\n",
+    },
+    none => (if current == "" then "" else string.trim(current) + "\n\n") + block + "\n",
+  }
+  if next == current then println("peek note already present in ${path}") else {
+    fs.write(path, next)!
+    println("peek note written to ${path} (agents pick it up at their next session start)")
+  }
+  ok(())
+}
+
 // ── dispatch ──────────────────────────────────────────────────────────────
 effect fn run(args: List[String]) -> Result[Unit, String] = {
   let first = list.first(args) ?? ""
@@ -179,6 +219,7 @@ effect fn run(args: List[String]) -> Result[Unit, String] = {
   else if first == "outline" then cmd_outline(args)
   else if first == "grep" then cmd_grep(args)
   else if first == "tree" then cmd_tree(args)
+  else if first == "init" then cmd_init(has(args, "--global"))
   else cmd_file(first, args)
 }
 
