@@ -1,4 +1,4 @@
-# peek
+# hew
 
 コードを、モデルが読むべき形で読むためのコマンドです。コーディングエージェントが 1 セッションに
 何百回も実行する `cat` / `grep` / `sed -n` / `awk '/^fn x/,/^}/'` のパイプラインの置き換えとして、
@@ -7,12 +7,12 @@
 [English](README.md)
 
 ```
-peek src/lower.rs --symbol lower_match              関数を 1 つ、名前で
-peek src/lower.rs --grep "Expr::Match" --around 4   マッチ行と前後。どの関数の中かを添えて
-peek src/lower.rs --lines 120-160                   行範囲。番号付き
-peek outline src/lower.rs                           ファイルの目次
-peek grep "unwrap()" src                            同じ行を畳み、囲むシンボルを示す grep
-peek tree src --depth 2                             ディレクトリ。vcs / build / 依存は除外
+hew src/lower.rs --symbol lower_match              関数を 1 つ、名前で
+hew src/lower.rs --grep "Expr::Match" --around 4   マッチ行と前後。どの関数の中かを添えて
+hew src/lower.rs --lines 120-160                   行範囲。番号付き
+hew outline src/lower.rs                           ファイルの目次
+hew grep "unwrap()" src                            同じ行を畳み、囲むシンボルを示す grep
+hew tree src --depth 2                             ディレクトリ。vcs / build / 依存は除外
 ```
 
 ## なぜ作ったか
@@ -20,24 +20,24 @@ peek tree src --depth 2                             ディレクトリ。vcs / b
 4,000 行のファイルを読んで関数 1 つについて答えるエージェントは、そのファイル全体を以後の
 全ターンで払い続けます。エージェントもそれを知っていて、シェルのパイプラインで範囲を絞ります。
 ただしそのやり方は壊れやすい。`awk` の範囲指定はネストした波括弧で崩れ、`sed -n` は先に行番号を
-探す必要があり、`grep -n` の結果はマッチが *どこの* ものかを教えてくれない。`peek` はその絞り込みを
+探す必要があり、`grep -n` の結果はマッチが *どこの* ものかを教えてくれない。`hew` はその絞り込みを
 1 つのバイナリで、正しく、1 回で行います。
 
 - **構造を知っている。** `--symbol` で関数・型・クラス・impl のメソッド・テストを名前で切り出せます。
   Almide、Rust、Go、TypeScript/JavaScript、Python は内蔵パーサで扱い、外部依存はありません。
-  tree-sitter の精度が欲しければ `PEEK_OUTLINE_BIN` で外部の目次プログラムを差し込めます。
+  tree-sitter の精度が欲しければ `HEW_OUTLINE_BIN` で外部の目次プログラムを差し込めます。
 - **番号とサイズが付く。** 全行に行番号が付くので、次の呼び出しは `--lines A-B` で済みます。
   長い行は切り詰め、飛ばした箇所には飛ばした行数を示します。ヘッダにはファイル全体の大きさ、
   フッタには見せた量が出ます。
 - **grep が場所を教える。** マッチはファイルごとにまとめ、同一行は畳んで（`×3`）、それぞれに囲んでいる
   シンボル名を付けます。ファイルごとと全体の上限で出力量は抑えられます。
-- **何も隠さない。** `peek` は頼まれたものだけを返します。要約も予算もありません。何が必要かは
+- **何も隠さない。** `hew` は頼まれたものだけを返します。要約も予算もありません。何が必要かは
   モデルが決めます。
 
 ## モデルに届くもの
 
 ```
-$ peek src/cmds/git/git.rs --symbol compact_diff
+$ hew src/cmds/git/git.rs --symbol compact_diff
 # src/cmds/git/git.rs  (4720 lines, 168 KB)
        ⋮  (647 lines)
      ── fn compact_diff ──
@@ -50,7 +50,7 @@ $ peek src/cmds/git/git.rs --symbol compact_diff
 ```
 
 ```
-$ peek grep "fn run_" src/cmds/git
+$ hew grep "fn run_" src/cmds/git
 # 14 matches in 3 files
 src/cmds/git/git.rs  (9)
   112│ pub fn run_diff(args: &[String]) -> Result<()>    ‹run_diff›
@@ -61,7 +61,7 @@ src/cmds/git/stash.rs  (2)
 ```
 
 ```
-$ peek src/lower.rs --grep "Expr::Match" --around 2
+$ hew src/lower.rs --grep "Expr::Match" --around 2
 # src/lower.rs  (1210 lines, 41 KB)
        ⋮  (310 lines)
      ── in fn lower_expr ──
@@ -78,14 +78,14 @@ $ peek src/lower.rs --grep "Expr::Match" --around 2
 ## インストール
 
 ```bash
-almide install github.com/O6lvl4/peek      # ネイティブバイナリが 1 つ → ~/.local/bin/peek
+almide install github.com/O6lvl4/hew      # ネイティブバイナリが 1 つ → ~/.local/bin/hew
 ```
 
-バイナリ 1 つ、ランタイムなし、他のツールも不要です。任意で `PEEK_OUTLINE_BIN=<プログラム>` に
+バイナリ 1 つ、ランタイムなし、他のツールも不要です。任意で `HEW_OUTLINE_BIN=<プログラム>` に
 目次プログラムを指定できます（パスを引数に受け取り、
 `{"lang","total_lines","symbols":[{"kind","name","start","end"}]}` を出力するもの）。指定すると、
 そのプログラムが知っている言語すべてで、`--symbol`、`outline`、grep のラベルにその結果が使われます。
-この契約で話せる tree-sitter 系のツールなら何でも差し込めます。peek 自体は特定のものを知りませんし、
+この契約で話せる tree-sitter 系のツールなら何でも差し込めます。hew 自体は特定のものを知りませんし、
 必要ともしません。
 
 ## エージェントに教える
@@ -93,21 +93,21 @@ almide install github.com/O6lvl4/peek      # ネイティブバイナリが 1 �
 `CLAUDE.md`（または使っているエージェントの同等ファイル）に追記します:
 
 ```
-コードは cat / sed -n / awk ではなく `peek` で読むこと:
-- `peek <file> --symbol NAME`            関数や型を 1 つ
-- `peek <file> --grep RE [--around N]`   マッチ行と前後
-- `peek <file> --lines A-B`              行範囲（出力は番号付きなので戻ってこられる）
-- `peek outline <file|dir>`              読む前に、何が入っているか
-- `peek grep RE [path]`                  囲んでいるシンボルを示す検索
+コードは cat / sed -n / awk ではなく `hew` で読むこと:
+- `hew <file> --symbol NAME`            関数や型を 1 つ
+- `hew <file> --grep RE [--around N]`   マッチ行と前後
+- `hew <file> --lines A-B`              行範囲（出力は番号付きなので戻ってこられる）
+- `hew outline <file|dir>`              読む前に、何が入っているか
+- `hew grep RE [path]`                  囲んでいるシンボルを示す検索
 ```
 
 ## コマンド
 
 ```
-peek <file> [--lines A-B] [--symbol NAME] [--grep RE] [--around N] [--head N] [--tail N] [--clip N]
-peek outline <file|dir> [--max N]
-peek grep <RE> [path...] [--per-file N] [--max-files N] [--clip N]
-peek tree <dir> [--depth N]
+hew <file> [--lines A-B] [--symbol NAME] [--grep RE] [--around N] [--head N] [--tail N] [--clip N]
+hew outline <file|dir> [--max N]
+hew grep <RE> [path...] [--per-file N] [--max-files N] [--clip N]
+hew tree <dir> [--depth N]
 ```
 
 既定値は `--around` 3、`--clip` 200 文字、`--per-file` 20 件、`--max-files` 50 ファイル。
@@ -117,9 +117,9 @@ peek tree <dir> [--depth N]
 
 ## アーキテクチャ
 
-![peek architecture](docs/architecture.svg)
+![hew architecture](docs/architecture.svg)
 
-エージェントは Bash 経由で `peek` を呼びます。main が引数を解釈してコマンドを選び、
+エージェントは Bash 経由で `hew` を呼びます。main が引数を解釈してコマンドを選び、
 3 つのモジュールを組み合わせて答えを作ります。
 
 - **view** — 表示する行範囲（ウィンドウ）を受け取り、番号付きの行、切り詰め、省略マーカー、
@@ -130,7 +130,7 @@ peek tree <dir> [--depth N]
 - **search** — ディレクトリを歩き（vcs / build / 依存 / バイナリは除外）、マッチをファイルごとに
   まとめ、同一行を畳み、上限をかけ、outline で囲んでいるシンボルを付ける。
 
-すべて内蔵です。`PEEK_OUTLINE_BIN` で外部の目次プログラムを指定した場合は、その JSON の結果が
+すべて内蔵です。`HEW_OUTLINE_BIN` で外部の目次プログラムを指定した場合は、その JSON の結果が
 内蔵ルールの代わりに使われます。
 
 [Almide](https://github.com/almide/almide) 製。MIT / Apache-2.0 のデュアルライセンス。

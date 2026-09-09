@@ -21,7 +21,7 @@
     .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; fill:#1f1f1f; }
   </style>
   <rect x="0" y="0" width="1040" height="560" fill="#ffffff"/>
-  <text x="20" y="30" class="h" font-size="16">peek — one call, exactly what was asked for</text>
+  <text x="20" y="30" class="h" font-size="16">hew — one call, exactly what was asked for</text>
 
   <!-- agent -->
   <rect x="20" y="70" width="170" height="70" class="box"/>
@@ -31,7 +31,7 @@
 
   <!-- cli -->
   <rect x="260" y="70" width="200" height="70" class="mod"/>
-  <text x="360" y="92" text-anchor="middle" class="h">peek (main)</text>
+  <text x="360" y="92" text-anchor="middle" class="h">hew (main)</text>
   <text x="360" y="109" text-anchor="middle" class="s">parses args, picks the command,</text>
   <text x="360" y="124" text-anchor="middle" class="s">errors say what to run instead</text>
   <line x1="190" y1="105" x2="258" y2="105" class="arrow"/>
@@ -39,16 +39,16 @@
 
   <!-- commands -->
   <rect x="530" y="60" width="150" height="40" class="box"/>
-  <text x="605" y="79" text-anchor="middle" class="t">peek &lt;file&gt; …</text>
+  <text x="605" y="79" text-anchor="middle" class="t">hew &lt;file&gt; …</text>
   <text x="605" y="93" text-anchor="middle" class="s">view · outline</text>
   <rect x="530" y="108" width="150" height="40" class="box"/>
-  <text x="605" y="127" text-anchor="middle" class="t">peek outline</text>
+  <text x="605" y="127" text-anchor="middle" class="t">hew outline</text>
   <text x="605" y="141" text-anchor="middle" class="s">outline</text>
   <rect x="530" y="156" width="150" height="40" class="box"/>
-  <text x="605" y="175" text-anchor="middle" class="t">peek grep</text>
+  <text x="605" y="175" text-anchor="middle" class="t">hew grep</text>
   <text x="605" y="189" text-anchor="middle" class="s">search · outline · view</text>
   <rect x="530" y="204" width="150" height="40" class="box"/>
-  <text x="605" y="223" text-anchor="middle" class="t">peek tree</text>
+  <text x="605" y="223" text-anchor="middle" class="t">hew tree</text>
   <text x="605" y="237" text-anchor="middle" class="s">search</text>
   <path d="M460,105 L495,105 L495,80 L528,80" class="arrow"/>
   <path d="M495,105 L495,128 L528,128" class="arrow"/>
@@ -78,7 +78,7 @@
   <text x="700" y="145" text-anchor="middle" class="l">uses</text>
 
   <text x="760" y="340" class="s">All built in: one binary, no runtime, no other tools.</text>
-  <text x="760" y="356" class="s">PEEK_OUTLINE_BIN: optional external outline program.</text>
+  <text x="760" y="356" class="s">HEW_OUTLINE_BIN: optional external outline program.</text>
 
   <!-- output -->
   <rect x="20" y="200" width="440" height="200" class="box"/>
@@ -101,5 +101,5 @@
   <text x="20" y="480" class="s">2. Every line is numbered so the next call can be `--lines A-B`. Gaps say how many lines were skipped.</text>
   <text x="20" y="498" class="s">3. Say where things are: the header has the file size, grep hits name their enclosing symbol, `--symbol` errors suggest names.</text>
   <text x="20" y="516" class="s">4. Bounded output: clipped lines, per-file and total caps on grep, 40 files per directory in tree.</text>
-  <text x="20" y="540" class="s">peek depends on nothing and knows nothing downstream. Output-side tools (vaults, budgets, hooks) can build on it, not the other way round.</text>
+  <text x="20" y="540" class="s">hew depends on nothing and knows nothing downstream. Output-side tools (vaults, budgets, hooks) can build on it, not the other way round.</text>
 </svg>

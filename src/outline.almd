@@ -3,9 +3,9 @@
 //   .almd              parsed here (top-level fn / effect fn / type / protocol / let / test)
 //   rust go ts js py   parsed here from declaration lines; ranges by brace matching (or
 //                      indentation for Python). Good enough to cut a symbol out of a file.
-//   Optionally, PEEK_OUTLINE_BIN names an external program (e.g. a tree-sitter one) that
+//   Optionally, HEW_OUTLINE_BIN names an external program (e.g. a tree-sitter one) that
 //   prints {"lang","total_lines","symbols":[{"kind","name","start","end"}]} for a path; when
-//   set, its answer wins. peek itself depends on nothing.
+//   set, its answer wins. hew itself depends on nothing.
 import json
 import regex
 import process
@@ -222,7 +222,7 @@ fn of_lines(lang: String, lines: List[String]) -> Outline = {
   Outline { lang: lang, total_lines: list.len(lines), symbols: syms }
 }
 
-// Outline of a file. `provider` is an optional external outline program (the PEEK_OUTLINE_BIN
+// Outline of a file. `provider` is an optional external outline program (the HEW_OUTLINE_BIN
 // contract: called with the path, prints the outline JSON); it may know languages we do not.
 effect fn of_file_with(path: String, lines: List[String], provider: Option[String]) -> Outline = {
   let lang = lang_of(path)
@@ -233,7 +233,7 @@ effect fn of_file_with(path: String, lines: List[String], provider: Option[Strin
   }
 }
 
-effect fn of_file(path: String, lines: List[String]) -> Outline = of_file_with(path, lines, env.get("PEEK_OUTLINE_BIN"))
+effect fn of_file(path: String, lines: List[String]) -> Outline = of_file_with(path, lines, env.get("HEW_OUTLINE_BIN"))
 
 // Exact name first, then a suffix match so `compile` finds `Compiler::compile`.
 fn find(o: Outline, name: String) -> Option[Sym] =

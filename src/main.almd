@@ -1,14 +1,14 @@
-// peek — read code the way a model should: numbered, sliced, structure-aware, sized.
+// hew — read code the way a model should: numbered, sliced, structure-aware, sized.
 //
-//   peek <file>                          the whole file, numbered (clipped lines, size header)
-//   peek <file> --lines A-B              a range
-//   peek <file> --symbol NAME            one function / type / class, found by the outline
-//   peek <file> --grep RE [--around N]   matching lines with context, merged, labelled by symbol
-//   peek <file> --head N | --tail N
-//   peek outline <file|dir> [--max N]    symbol table
-//   peek grep RE [path...] [--per-file N] [--max-files N]
-//   peek tree <dir> [--depth N]
-//   peek init [--global]                 write the how-to-read-code note into CLAUDE.md
+//   hew <file>                          the whole file, numbered (clipped lines, size header)
+//   hew <file> --lines A-B              a range
+//   hew <file> --symbol NAME            one function / type / class, found by the outline
+//   hew <file> --grep RE [--around N]   matching lines with context, merged, labelled by symbol
+//   hew <file> --head N | --tail N
+//   hew outline <file|dir> [--max N]    symbol table
+//   hew grep RE [path...] [--per-file N] [--max-files N]
+//   hew tree <dir> [--depth N]
+//   hew init [--global]                 write the how-to-read-code note into CLAUDE.md
 import fs
 import env
 import process
@@ -18,16 +18,16 @@ import self.search
 
 let VERSION = "0.1.0"
 
-fn usage() -> String = """peek ${VERSION} — read code the way a model should
+fn usage() -> String = """hew ${VERSION} — read code the way a model should
 
-  peek <file> [--lines A-B] [--symbol NAME] [--grep RE] [--around N] [--head N] [--tail N] [--clip N]
-  peek outline <file|dir> [--max N]
-  peek grep <RE> [path...] [--per-file N] [--max-files N]
-  peek tree <dir> [--depth N]
-  peek init [--global]                 add the note that tells an agent to read code with peek to CLAUDE.md
+  hew <file> [--lines A-B] [--symbol NAME] [--grep RE] [--around N] [--head N] [--tail N] [--clip N]
+  hew outline <file|dir> [--max N]
+  hew grep <RE> [path...] [--per-file N] [--max-files N]
+  hew tree <dir> [--depth N]
+  hew init [--global]                 add the note that tells an agent to read code with hew to CLAUDE.md
 
 Output is numbered so you can come back with --lines; long lines are clipped; gaps are marked.
---symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Set PEEK_OUTLINE_BIN to an
+--symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Set HEW_OUTLINE_BIN to an
 external outline program (a path in, the outline JSON out) to override those."""
 
 // ── tiny arg parser ───────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ effect fn select_windows(path: String, lines: List[String], total: Int, args: Li
         none => {
           let needle = string.to_lower(name)   // a separate binding: the closure moves what it captures (almide codegen)
           let near = list.filter(o.symbols, (s) => string.contains(string.to_lower(s.name), needle))
-          let hint = if list.is_empty(near) then "run `peek outline ${path}`" else "did you mean: " + list.join(list.map(list.take(near, 5), (s) => s.name), ", ")
+          let hint = if list.is_empty(near) then "run `hew outline ${path}`" else "did you mean: " + list.join(list.map(list.take(near, 5), (s) => s.name), ", ")
           err("no symbol `${name}` in ${path} (${hint})")
         },
       }
@@ -100,7 +100,7 @@ effect fn select_windows(path: String, lines: List[String], total: Int, args: Li
   }
 }
 
-// ── peek <file> ───────────────────────────────────────────────────────────
+// ── hew <file> ───────────────────────────────────────────────────────────
 effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
   guard fs.is_file(path) else err("no such file: ${path}")
   let text = fs.read_text(path)!
@@ -117,7 +117,7 @@ effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
   ok(())
 }
 
-// ── peek outline ──────────────────────────────────────────────────────────
+// ── hew outline ──────────────────────────────────────────────────────────
 effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
   let target = list.get(positionals(args), 1) ?? "."
   let max = opt_int(args, "--max", 120)
@@ -134,18 +134,18 @@ effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
   ok(())
 }
 
-// ── peek grep ─────────────────────────────────────────────────────────────
+// ── hew grep ─────────────────────────────────────────────────────────────
 effect fn cmd_grep(args: List[String]) -> Result[Unit, String] = {
   let pos = positionals(args)
   let pat = list.get(pos, 1) ?? ""
-  guard pat != "" else err("usage: peek grep <RE> [path...]")
+  guard pat != "" else err("usage: hew grep <RE> [path...]")
   let paths = if list.len(pos) > 2 then list.drop(pos, 2) else ["."]
   let results = search.run(pat, paths, opt_int(args, "--per-file", 20), opt_int(args, "--max-files", 50))!
   for l in search.render(results, opt_int(args, "--clip", view.CLIP)) { println(l) }
   ok(())
 }
 
-// ── peek tree ─────────────────────────────────────────────────────────────
+// ── hew tree ─────────────────────────────────────────────────────────────
 effect fn cmd_tree(args: List[String]) -> Result[Unit, String] = {
   let root = list.get(positionals(args), 1) ?? "."
   let depth = opt_int(args, "--depth", 3)
@@ -173,29 +173,46 @@ effect fn tree_dir(dir: String, indent: String, level: Int, max_depth: Int) -> R
   ok(())
 }
 
-// ── peek init ─────────────────────────────────────────────────────────────
+// ── hew init ─────────────────────────────────────────────────────────────
 // Agents read CLAUDE.md at session start; a short, imperative block there is what makes them
-// reach for peek instead of cat / sed -n / awk. Kept between markers so re-running replaces it.
-let NOTE_BEGIN = "<!-- peek:begin -->"
-let NOTE_END = "<!-- peek:end -->"
+// reach for hew instead of cat / sed -n / awk. Kept between markers so re-running replaces it.
+let NOTE_BEGIN = "<!-- hew:begin -->"
+let NOTE_END = "<!-- hew:end -->"
+// hew was called peek until 2026-09-09. A CLAUDE.md written by that version has
+// the old markers, and the new ones would not find them, so `init` would leave
+// the old note in place and append a second one telling the agent to run a
+// command that no longer exists. It is dropped first.
+let OLD_BEGIN = "<!-- peek:begin -->"
+let OLD_END = "<!-- peek:end -->"
 let NOTE = """
-<!-- peek:begin -->
-## Reading code: use `peek`
-Do not read source with `cat`, `sed -n`, `awk '/…/,/…/'` or `head`/`tail` pipelines. `peek` returns
+<!-- hew:begin -->
+## Reading code: use `hew`
+Do not read source with `cat`, `sed -n`, `awk '/…/,/…/'` or `head`/`tail` pipelines. `hew` returns
 exactly the part you ask for, numbered, with the file's size and the enclosing symbol, in one call:
-- `peek <file> --symbol NAME`            one function / type / method by name (Almide, Rust, Go, TS/JS, Python, and more via a provider)
-- `peek <file> --grep RE [--around N]`   matching lines with context, labelled by the enclosing function
-- `peek <file> --lines A-B`              a range; the output is numbered so you can narrow further
-- `peek outline <file|dir>`              what is in a file before you read it
-- `peek grep RE [path]`                  search that folds repeats and names the enclosing symbol
-- `peek tree <dir>`                      a directory without vcs / build / dependency noise
-Read a whole file only when you need all of it: `peek <file>`.
-<!-- peek:end -->
+- `hew <file> --symbol NAME`            one function / type / method by name (Almide, Rust, Go, TS/JS, Python, and more via a provider)
+- `hew <file> --grep RE [--around N]`   matching lines with context, labelled by the enclosing function
+- `hew <file> --lines A-B`              a range; the output is numbered so you can narrow further
+- `hew outline <file|dir>`              what is in a file before you read it
+- `hew grep RE [path]`                  search that folds repeats and names the enclosing symbol
+- `hew tree <dir>`                      a directory without vcs / build / dependency noise
+Read a whole file only when you need all of it: `hew <file>`.
+<!-- hew:end -->
 """
+
+// Everything between `begin` and `end`, and the markers with it, removed.
+fn without_block(text: String, begin: String, end: String) -> String =
+  match string.index_of(text, begin) {
+    none => text,
+    some(a) => match string.index_of(text, end) {
+      none => text,
+      some(b) => string.trim_end(string.slice(text, 0, a)) + string.drop(text, b + string.len(end)),
+    },
+  }
 
 effect fn cmd_init(global: Bool) -> Result[Unit, String] = {
   let path = if global then "${env.get("HOME") ?? "."}/.claude/CLAUDE.md" else "${env.cwd()!}/CLAUDE.md"
-  let current = match fs.read_text_if_exists(path) { ok(some(t)) => t, _ => "" }
+  let found = match fs.read_text_if_exists(path) { ok(some(t)) => t, _ => "" }
+  let current = without_block(found, OLD_BEGIN, OLD_END)
   let block = string.trim(NOTE)
   let next = match string.index_of(current, NOTE_BEGIN) {
     some(a) => match string.index_of(current, NOTE_END) {
@@ -204,9 +221,9 @@ effect fn cmd_init(global: Bool) -> Result[Unit, String] = {
     },
     none => (if current == "" then "" else string.trim(current) + "\n\n") + block + "\n",
   }
-  if next == current then println("peek note already present in ${path}") else {
+  if next == current then println("hew note already present in ${path}") else {
     fs.write(path, next)!
-    println("peek note written to ${path} (agents pick it up at their next session start)")
+    println("hew note written to ${path} (agents pick it up at their next session start)")
   }
   ok(())
 }
@@ -215,7 +232,7 @@ effect fn cmd_init(global: Bool) -> Result[Unit, String] = {
 effect fn run(args: List[String]) -> Result[Unit, String] = {
   let first = list.first(args) ?? ""
   if first == "" or first == "--help" or first == "-h" then { println(usage()); ok(()) }
-  else if first == "--version" then { println("peek ${VERSION}"); ok(()) }
+  else if first == "--version" then { println("hew ${VERSION}"); ok(()) }
   else if first == "outline" then cmd_outline(args)
   else if first == "grep" then cmd_grep(args)
   else if first == "tree" then cmd_tree(args)
@@ -226,7 +243,7 @@ effect fn run(args: List[String]) -> Result[Unit, String] = {
 effect fn main() -> Unit = {
   match run(env.args()) {
     ok(_) => (),
-    err(e) => { eprintln("peek: ${e}"); process.exit(1) },
+    err(e) => { eprintln("hew: ${e}"); process.exit(1) },
   }
 }
 
