@@ -16,3 +16,8 @@ Python decorators, nested same-named declarations, async methods and `.pyi`
 discovery. The GitHub workflow builds a pinned gramide with Python support and
 runs this integration test. The checks require the `gramide` engine label so a
 heuristic fallback cannot silently pass them.
+
+Recovery integration also checks that an unfinished Python method is omitted
+while its intact sibling methods stay selectable, with the `gramide-recovered`
+engine label. Provider fixtures reject unknown policies, contradictory complete
+flags, missing/invalid error ranges and declarations overlapping those ranges.

@@ -220,7 +220,7 @@ fn valid_outline(o: Outline, lang: String, total: Int) -> Bool =
     s.name != "" and s.kind != "" and s.start >= 1 and s.end >= s.start and s.end <= total)
 
 // A strict grammar result is preferred over declaration heuristics. Older
-// gramide versions and failed parses fall back; partial JSON is never trusted.
+// gramide versions fall back; recovery requires the separate validated contract.
 fn gramide_result(raw: String, lang: String, total: Int) -> Result[Outline, String] = {
   let j = json.parse(raw)!
   guard (json.get_int(j, "schema_version") ?? 0) == 1 else err("unsupported symbol schema")
@@ -230,10 +230,59 @@ fn gramide_result(raw: String, lang: String, total: Int) -> Result[Outline, Stri
   ok(Outline { ...o, engine: "gramide" })
 }
 
+fn intersects_error(ranges: List[(Int, Int)], start: Int, end: Int) -> Bool = {
+  var lo = 0
+  var hi = list.len(ranges)
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    match list.get(ranges, mid) {
+      some(r) => { if r.1 <= start then lo = mid + 1 else hi = mid },
+      none => { hi = mid },
+    }
+  }
+  match list.get(ranges, lo) { some(r) => r.0 < end, none => false }
+}
+fn recovered_result(raw: String, lang: String, total: Int) -> Result[Outline, String] = {
+  let j = json.parse(raw)!
+  guard (json.get_string(j, "recovery_policy") ?? "") == "error-free-declarations-v1" else err("unsupported recovery policy")
+  if json.get_bool(j, "complete") ?? false then {
+    let errors = json.get_array(j, "errors") |> option.to_result("missing recovery ranges")!
+    guard list.is_empty(errors) and json.get_string(j, "diagnostic") == some("") else err("inconsistent complete recovery result")
+    gramide_result(raw, lang, total)
+  } else {
+    guard (json.get_int(j, "schema_version") ?? 0) == 1 and json.get_bool(j, "complete") == some(false) else err("invalid recovered schema")
+    guard (json.get_string(j, "diagnostic") ?? "") != "" else err("missing recovery diagnostic")
+    let errors = json.get_array(j, "errors") |> option.to_result("missing recovery ranges")!
+    guard not list.is_empty(errors) else err("missing recovery ranges")
+    var ranges: List[(Int, Int)] = []
+    var previous = 0
+    for e in errors {
+      let start = json.get_int(e, "start_byte") ?? -1
+      let end = json.get_int(e, "end_byte") ?? -1
+      let line = json.get_int(e, "start") ?? -1
+      let last = json.get_int(e, "end") ?? -1
+      guard start >= previous and end > start and line >= 1 and last >= line and last <= total else err("invalid recovery range")
+      list.push(ranges, (start, end))
+      previous = end
+    }
+    let o = from_json(raw)!
+    guard valid_outline(o, lang, total) else err("invalid recovered symbol ranges")
+    for row in json.get_array(j, "symbols") ?? [] {
+      let start = json.get_int(row, "start_byte") ?? -1
+      let end = json.get_int(row, "end_byte") ?? -1
+      guard start >= 0 and end > start and not intersects_error(ranges, start, end) else err("symbol overlaps recovery error")
+    }
+    ok(Outline { ...o, engine: "gramide-recovered" })
+  }
+}
 effect fn gramide_read(path: String, lang: String, total: Int) -> Result[Outline, String] = {
   let st = process.exec_status_timeout("gramide", ["symbols", path], 3000)!
-  guard st.code == 0 else err("gramide parse failed")
-  gramide_result(st.stdout, lang, total)
+  if st.code == 0 then gramide_result(st.stdout, lang, total)
+  else {
+    let partial = process.exec_status_timeout("gramide", ["symbols-recovered", path], 3000)!
+    guard partial.code == 0 else err("gramide recovery unavailable")
+    recovered_result(partial.stdout, lang, total)
+  }
 }
 
 effect fn via_gramide(path: String, lang: String, total: Int) -> Option[Outline] =

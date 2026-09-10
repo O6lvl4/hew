@@ -29,7 +29,7 @@ fn usage() -> String = """hew ${VERSION} — read code the way a model should
   hew init [--global]                 add the note that tells an agent to read code with hew to CLAUDE.md
 
 Output is numbered so you can come back with --lines; long lines are clipped; gaps are marked.
---symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Almide/Go/Rust use gramide when available; other cases use heuristics. Set HEW_OUTLINE_BIN to an
+--symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Almide/Go/Rust/Python use gramide when available; recovered Python declarations are labeled. Other cases use heuristics. Set HEW_OUTLINE_BIN to an
 external outline program (a path in, the outline JSON out) to override those."""
 
 // ── tiny arg parser ───────────────────────────────────────────────────────
