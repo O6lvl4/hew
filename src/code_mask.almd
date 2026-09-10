@@ -59,20 +59,34 @@ fn rust_char(source: Bytes, start: Int) -> Bool = {
   }
 }
 
-fn hidden_end(lang: String, source: Bytes, i: Int) -> Int = {
+fn comment_end(lang: String, source: Bytes, i: Int) -> Int = {
   let b = byte_at(source, i)
   let n = byte_at(source, i + 1)
-  if (lang == "python" and b == 35) or (lang != "python" and b == 47 and n == 47) then {
+  let line_comment = if lang == "python" then b == 35 else b == 47 and n == 47
+  if line_comment then {
     var end = i
     while end < bytes.len(source) and byte_at(source, end) != 10 { end = end + 1 }
     end
   } else if lang != "python" and b == 47 and n == 42 then block_end(source, i, lang == "rust")
-  else if lang == "rust" and b == 114 and (n == 34 or n == 35) then raw_end(source, i)
-  else if b == 34 or (b == 39 and (lang != "rust" or rust_char(source, i))) then {
-    let width = if lang == "python" and n == b and byte_at(source, i + 2) == b then 3 else 1
-    quoted_end(source, i, b, width, true)
-  } else if b == 96 and (lang == "go" or lang == "javascript" or lang == "typescript") then quoted_end(source, i, b, 1, lang != "go")
   else i
+}
+
+fn quoted_literal_end(lang: String, source: Bytes, i: Int, quote: Int) -> Int = {
+  let triple = lang == "python" and byte_at(source, i + 1) == quote and byte_at(source, i + 2) == quote
+  quoted_end(source, i, quote, if triple then 3 else 1, true)
+}
+
+fn literal_end(lang: String, source: Bytes, i: Int) -> Int = match byte_at(source, i) {
+  34 => quoted_literal_end(lang, source, i, 34),
+  39 => if lang != "rust" or rust_char(source, i) then quoted_literal_end(lang, source, i, 39) else i,
+  96 => if list.contains(["go", "javascript", "typescript"], lang) then quoted_end(source, i, 96, 1, lang != "go") else i,
+  114 => if lang == "rust" then raw_end(source, i) else i,
+  _ => i,
+}
+
+fn hidden_end(lang: String, source: Bytes, i: Int) -> Int = {
+  let end = comment_end(lang, source, i)
+  if end > i then end else literal_end(lang, source, i)
 }
 
 fn lines(lang: String, input: List[String]) -> List[String] = {
