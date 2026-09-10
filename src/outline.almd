@@ -237,8 +237,7 @@ effect fn gramide_read(path: String, lang: String, total: Int) -> Result[Outline
 }
 
 effect fn via_gramide(path: String, lang: String, total: Int) -> Option[Outline] =
-  if not list.contains(["almide", "go", "rust"], lang) then none
-  else match gramide_read(path, lang, total) { ok(o) => some(o), err(_) => none }
+  match gramide_read(path, lang, total) { ok(o) => some(o), err(_) => none }
 
 effect fn of_file_with(path: String, lines: List[String], provider: Option[String]) -> Outline = {
   let lang = lang_of(path)
@@ -350,4 +349,21 @@ test "provider contracts reject missing fields and invalid ranges" {
   let o = Outline { lang: "rust", total_lines: 2, engine: "provider", symbols: [Sym { kind: "fn", name: "x", start: 1, end: 3 }] }
   assert(not valid_outline(o, "rust", 2))
   assert(not valid_outline(Outline { ...o, symbols: ([]: List[Sym]) }, "go", 2))
+}
+
+// Directory scans discover new extensions from package metadata. Older
+// gramide builds simply return no extra extensions; built-ins still work.
+effect fn registered_extensions() -> List[String] = {
+  match process.exec_status_timeout("gramide", ["languages"], 3000) {
+    err(_) => [],
+    ok(st) => if st.code != 0 then [] else match json.parse(st.stdout) {
+      err(_) => [],
+      ok(j) => if (json.get_int(j, "schema_version") ?? 0) != 1 then [] else
+        list.flat_map(json.get_array(j, "packages") ?? [], (p) => {
+          let caps = list.filter_map(json.get_array(p, "capabilities") ?? [], (v) => match value.as_string(v) { ok(s) => some(s), err(_) => none })
+          if not list.contains(caps, "symbols") then [] else
+            list.filter(list.filter_map(json.get_array(p, "extensions") ?? [], (v) => match value.as_string(v) { ok(s) => some(s), err(_) => none }), (ext) => string.starts_with(ext, ".") and string.len(ext) > 1)
+        }),
+    },
+  }
 }

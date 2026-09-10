@@ -123,7 +123,8 @@ effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
 effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
   let target = list.get(positionals(args), 1) ?? "."
   let max = opt_int(args, "--max", 120)
-  let files = if fs.is_dir(target) then search.collect([target])! |> list.filter((f) => outline.lang_of(f) != "text") else [target]
+  let extensions = if fs.is_dir(target) then outline.registered_extensions()! else ([]: List[String])
+  let files = if fs.is_dir(target) then search.collect([target])! |> list.filter((f) => outline.lang_of(f) != "text" or list.any(extensions, (ext) => string.ends_with(f, ext))) else [target]
   guard not list.is_empty(files) else err("nothing to outline under ${target}")
   for f in files {
     let lines = string.lines(fs.read_text(f)!)
