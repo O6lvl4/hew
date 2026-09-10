@@ -1,6 +1,6 @@
 // outline — a file's table of contents: symbol kind, name, line range.
 //
-//   .almd / .rs / .go   gramide symbols when installed; heuristics otherwise
+//   Registered packages (including Python) use gramide symbols when installed.
 //   rust go ts js py   parsed here from declaration lines; ranges by brace matching (or
 //                      indentation for Python). Good enough to cut a symbol out of a file.
 //   Optionally, HEW_OUTLINE_BIN names an external program (e.g. a tree-sitter one) that

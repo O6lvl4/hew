@@ -25,9 +25,9 @@ model has to find first, `grep -n` results say nothing about *where* a match is)
 does the narrowing properly, once, in one binary:
 
 - **Structure-aware.** `--symbol` cuts out a function, type, class, impl method or test by
-  name. Almide, Rust, Go, TypeScript/JavaScript and Python are parsed built in, with no
-  dependencies. An external outline program can be plugged in with `HEW_OUTLINE_BIN` if you
-  want tree-sitter accuracy.
+  name. A compatible `gramide` supplies parser-backed ranges for Almide, Rust, Go and
+  Python. Built-in declaration heuristics also cover TypeScript/JavaScript and work
+  without an external parser. `HEW_OUTLINE_BIN` selects another outline provider.
 - **Numbered and sized.** Every line carries its number so the next call can be
   `--lines A-B`. Long lines are clipped. Gaps are marked with how many lines were skipped.
   The header says how big the whole file is; the footer says how much was shown.
@@ -145,8 +145,11 @@ Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apach
 
 hew automatically tries `gramide symbols` when a compatible binary is on `PATH`.
 Directory outlines discover extra file extensions from `gramide languages` packages
-with the `symbols` capability. The bundled grammars cover Almide, Go and Rust. The grammar provides declaration ranges, including Rust
-attributes and multiline headers. An explicit `HEW_OUTLINE_BIN` provider takes
+with the `symbols` capability. The bundled grammars cover Almide, Go, Rust and Python (`.py`, `.pyi`).
+The grammar provides declaration ranges, including Rust attributes, multiline
+headers and Python decorators. Python nested classes and functions have qualified
+paths, such as `Outer.Inner.method` and `Outer.method.helper`, so `--symbol` can
+select same-named declarations precisely. An explicit `HEW_OUTLINE_BIN` provider takes
 precedence. Unsupported languages, missing tools, invalid contracts and failed
 parses fall back to the built-in heuristics. Outline headers and selected-symbol
 labels identify `gramide`, `provider` or `heuristic`; fallback is not parser parity.

@@ -11,4 +11,15 @@ with tempfile.TemporaryDirectory() as tmp:
  assert '; gramide)' in outline and 'L1-7' in outline and 'phantom' not in outline,outline
  body=subprocess.check_output([str(hew),str(p),'--symbol','real'],env=env,text=True)
  assert '#[inline]' in body and 'pub fn' in body and '7│ }' in body,body
+with tempfile.TemporaryDirectory() as tmp:
+ p=Path(tmp)/'sample.py'
+ p.write_text('class Outer:\n @decorate\n def method(self):\n  def helper(): return "日本語"\n  return helper()\n\n # comment between declarations\n class Inner:\n  async def method(self): return 2\n\ndef method(): return 3\n')
+ outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+ assert '; gramide)' in outline and 'Outer.Inner.method' in outline,outline
+ for name,include,exclude in [('Outer.method','@decorate','class Inner'),('Outer.method.helper','日本語','return helper()'),('Outer.Inner.method','async def method','return 3')]:
+  body=subprocess.check_output([str(hew),str(p),'--symbol',name],env=env,text=True)
+  assert include in body and exclude not in body,(name,body)
+ p=p.with_suffix('.pyi');p.write_text('class Stub:\n def method(self) -> int: ...\n')
+ outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+ assert '; gramide)' in outline and 'Stub.method' in outline,outline
 print('Real gramide → hew integration passed')
