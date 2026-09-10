@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: O6lvl4/gramide
-          ref: 0d372f16231c2b71d24597d0d7c546621227669d
+          ref: 64b0e5e7530f2d2ce6581d2147867eee1d9f727c
           path: .ci/gramide
           persist-credentials: false
       - name: Build pinned gramide
