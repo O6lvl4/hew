@@ -128,7 +128,11 @@ composes three modules:
   markers, header and footer.
 - **outline** — the table of contents. Almide has its own parser; Rust / Go / TS·JS / Python
   use a per-language table of declaration rules and get their ranges from brace matching
-  (indentation for Python). `find(name)` looks a symbol up by name, `enclosing(line)` by line.
+  (indentation for Python). A stateful lexical mask hides comments and literals
+  before declaration detection and range matching, including Rust nested comments/raw
+  strings and Go/Python multiline literals. These remain declaration heuristics:
+  multiline headers, JavaScript regex literals and template interpolation are not a
+  full grammar. `find(name)` looks a symbol up by name, `enclosing(line)` by line.
 - **search** — walks directories (skipping vcs / build / deps / binaries), groups matches per
   file, folds identical lines, applies caps, and asks outline for the enclosing symbol.
 
