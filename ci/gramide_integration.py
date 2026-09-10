@@ -33,4 +33,16 @@ with tempfile.TemporaryDirectory() as tmp:
  p.write_text('if broken\n def phantom(): pass\ndef real(): pass\n')
  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
  assert '; gramide-recovered)' in outline and 'real' in outline and 'phantom' not in outline,outline
+with tempfile.TemporaryDirectory() as tmp:
+ p=Path(tmp)/'editing.py'
+ for family in ['f','t']:
+  p.write_text('class Box:\n def good(self): return 1\n def bad(self):\n  x = '+family+'"{value}unfinished\n def next(self): return 2\n')
+  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+  assert '; gramide-recovered)' in outline and 'Box.good' in outline and 'Box.next' in outline and 'Box.bad' not in outline,outline
+  for name,text in [('Box.good','return 1'),('Box.next','return 2')]:
+   body=subprocess.check_output([str(hew),str(p),'--symbol',name],env=env,text=True)
+   assert text in body and 'unfinished' not in body and 'gramide-recovered' in body,(name,body)
+  p.write_text('def before(): return 1\nx = '+family+'"""unfinished\ndef phantom(): pass\n')
+  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+  assert '; gramide-recovered)' in outline and 'before' in outline and 'phantom' not in outline,outline
 print('Real gramide → hew integration passed')
