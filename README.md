@@ -143,8 +143,9 @@ Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apach
 
 ## Parser-backed reading
 
-For Almide, Go and Rust, hew automatically uses `gramide symbols` when a compatible
-binary is on `PATH`. The grammar provides declaration ranges, including Rust
+hew automatically tries `gramide symbols` when a compatible binary is on `PATH`.
+Directory outlines discover extra file extensions from `gramide languages` packages
+with the `symbols` capability. The bundled grammars cover Almide, Go and Rust. The grammar provides declaration ranges, including Rust
 attributes and multiline headers. An explicit `HEW_OUTLINE_BIN` provider takes
 precedence. Unsupported languages, missing tools, invalid contracts and failed
 parses fall back to the built-in heuristics. Outline headers and selected-symbol
