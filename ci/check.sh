@@ -7,10 +7,11 @@ compiler="${ALMIDE_BIN:-almide}"
 python3 ci/smoke.py
 python3 ci/providers.py
 
-# A ratchet, not a target: the lowest of any repository here, and the one worth defending.
-# It is only ever allowed to go down. Raising it needs a reason written beside it.
+# A per-file ratchet, not a target: the lowest of any repository here, and the one worth defending.
+# Each file is held where it stands, so a clean one cannot rot up to the worst
+# one. Numbers only ever fall; --write-baseline records a fall.
 if command -v codopsy-almd >/dev/null; then
-  codopsy-almd --quiet --max 12 src/
+  codopsy-almd --quiet --baseline .codopsy-almd.json src/
 else
   echo "codopsy-almd not on PATH: structural check skipped (almide install github.com/O6lvl4/codopsy-almd)"
 fi
