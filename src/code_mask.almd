@@ -1,0 +1,90 @@
+// Hide comment/literal contents while preserving byte offsets and line breaks.
+// This is lexical support for declaration heuristics, not a language parser.
+import bytes
+
+fn byte_at(source: Bytes, i: Int) -> Int = bytes.get_or(source, i, -1)
+
+fn quoted_end(source: Bytes, start: Int, quote: Int, width: Int, escaped: Bool) -> Int = {
+  var i = start + width
+  var done = false
+  while i < bytes.len(source) and not done {
+    if escaped and byte_at(source, i) == 92 then i = i + 2
+    else if byte_at(source, i) == quote and (width == 1 or (byte_at(source, i + 1) == quote and byte_at(source, i + 2) == quote)) then {
+      i = i + width
+      done = true
+    } else i = i + 1
+  }
+  int.min(i, bytes.len(source))
+}
+
+fn block_end(source: Bytes, start: Int, nested: Bool) -> Int = {
+  var i = start + 2
+  var depth = 1
+  while i < bytes.len(source) and depth > 0 {
+    if byte_at(source, i) == 42 and byte_at(source, i + 1) == 47 then { depth = depth - 1; i = i + 2 }
+    else if nested and byte_at(source, i) == 47 and byte_at(source, i + 1) == 42 then { depth = depth + 1; i = i + 2 }
+    else i = i + 1
+  }
+  i
+}
+
+// A Rust raw string closes with exactly the opening number of hashes.
+fn raw_end(source: Bytes, start: Int) -> Int = {
+  var q = start + 1
+  while byte_at(source, q) == 35 { q = q + 1 }
+  if byte_at(source, q) != 34 then start
+  else {
+    let hashes = q - start - 1
+    var i = q + 1
+    var end = bytes.len(source)
+    var done = false
+    while i < bytes.len(source) and not done {
+      if byte_at(source, i) == 34 then {
+        var h = 0
+        while h < hashes and byte_at(source, i + 1 + h) == 35 { h = h + 1 }
+        if h == hashes then { end = i + 1 + hashes; done = true } else ()
+      } else ()
+      i = i + 1
+    }
+    end
+  }
+}
+
+fn rust_char(source: Bytes, start: Int) -> Bool = {
+  if byte_at(source, start + 1) == 92 then true
+  else {
+    var end = start + 2
+    while byte_at(source, end) >= 128 and byte_at(source, end) < 192 { end = end + 1 }
+    byte_at(source, end) == 39
+  }
+}
+
+fn hidden_end(lang: String, source: Bytes, i: Int) -> Int = {
+  let b = byte_at(source, i)
+  let n = byte_at(source, i + 1)
+  if (lang == "python" and b == 35) or (lang != "python" and b == 47 and n == 47) then {
+    var end = i
+    while end < bytes.len(source) and byte_at(source, end) != 10 { end = end + 1 }
+    end
+  } else if lang != "python" and b == 47 and n == 42 then block_end(source, i, lang == "rust")
+  else if lang == "rust" and b == 114 and (n == 34 or n == 35) then raw_end(source, i)
+  else if b == 34 or (b == 39 and (lang != "rust" or rust_char(source, i))) then {
+    let width = if lang == "python" and n == b and byte_at(source, i + 2) == b then 3 else 1
+    quoted_end(source, i, b, width, true)
+  } else if b == 96 and (lang == "go" or lang == "javascript" or lang == "typescript") then quoted_end(source, i, b, 1, lang != "go")
+  else i
+}
+
+fn lines(lang: String, input: List[String]) -> List[String] = {
+  let source = bytes.from_string(list.join(input, "\n"))
+  var out = bytes.new(0)
+  var hidden = 0
+  var i = 0
+  while i < bytes.len(source) {
+    if i >= hidden then hidden = hidden_end(lang, source, i) else ()
+    let b = byte_at(source, i)
+    bytes.push(out, if i < hidden and b != 10 and b != 13 and b != 9 then 32 else b)
+    i = i + 1
+  }
+  string.split(bytes.to_string_lossy(out), "\n")
+}

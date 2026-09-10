@@ -10,6 +10,7 @@ import json
 import regex
 import process
 import env
+import self.code_mask
 
 type Sym = { kind: String, name: String, start: Int, end: Int }
 type Outline = { lang: String, total_lines: Int, symbols: List[Sym] }
@@ -124,7 +125,7 @@ fn brace_end(lines: List[String], start: Int) -> Int = {
   var found = 0
   while found == 0 and i <= total {
     let l = list.get(lines, i - 1) ?? ""
-    let code = strip_strings_and_comments(l)
+    let code = l
     if not seen_open and string.contains(code, ";") and not string.contains(code, "{") then found = i
     else {
       for ch in string.chars(code) {
@@ -138,33 +139,18 @@ fn brace_end(lines: List[String], start: Int) -> Int = {
   if found == 0 then total else found
 }
 
-// Remove string literals and line comments so braces inside them do not count. Approximate.
-fn strip_strings_and_comments(line: String) -> String = {
-  var out = ""
-  var in_str = ""
-  var prev = ""
-  var done = false
-  for ch in string.chars(line) {
-    if done then ()
-    else if in_str != "" then { if ch == in_str and prev != "\\" then in_str = "" else () }
-    else if ch == "\"" or ch == "'" or ch == "`" then in_str = ch
-    else if ch == "/" and prev == "/" then { out = string.drop_end(out, 1); done = true }
-    else if ch == "#" then done = true
-    else out = out + ch
-    prev = ch
-  }
-  out
-}
-
-fn indent_end(lines: List[String], start: Int) -> Int = {
+fn indent_end(lines: List[String], code: List[String], start: Int) -> Int = {
   let total = list.len(lines)
   let base = indent_of(list.get(lines, start - 1) ?? "")
   var i = start + 1
   var last = start
   var go = true
   while go and i <= total {
-    let l = list.get(lines, i - 1) ?? ""
-    if string.trim(l) == "" then i = i + 1
+    let l = list.get(code, i - 1) ?? ""
+    if string.trim(l) == "" then {
+      if string.trim(list.get(lines, i - 1) ?? "") != "" then last = i else ()
+      i = i + 1
+    }
     else if indent_of(l) > base then { last = i; i = i + 1 }
     else go = false
   }
@@ -172,13 +158,14 @@ fn indent_end(lines: List[String], start: Int) -> Int = {
 }
 
 fn generic_outline(lang: String, lines: List[String]) -> List[Sym] = {
-  let starts = list.enumerate(lines) |> list.filter_map((p) => match decl_of(lang, p.1) {
+  let code = code_mask.lines(lang, lines)
+  let starts = list.enumerate(code) |> list.filter_map((p) => match decl_of(lang, p.1) {
     some((kind, name)) => some((p.0 + 1, kind, name)),
     none => none,
   })
   list.map(starts, (s) => {
     let (start, kind, name) = s
-    let end = if lang == "python" then indent_end(lines, start) else brace_end(lines, start)
+    let end = if lang == "python" then indent_end(lines, code, start) else brace_end(code, start)
     Sym { kind: kind, name: name, start: start, end: end }
   })
 }
@@ -300,4 +287,28 @@ test "go and typescript declarations" {
   assert(list.contains(names, "f"))
   assert(list.contains(names, "g"))
   assert(list.contains(names, "C.m"))
+}
+
+
+test "multiline comments cannot end a symbol or invent a declaration" {
+  let src = "fn real() {\n    /* }\nfn phantom() {}\n    /* nested } */\n    */\n    let x = 1;\n}\nfn next() {}"
+  let o = of_lines("rust", string.lines(src))
+  assert_eq(list.map(o.symbols, (s) => s.name), ["real", "next"])
+  assert_eq((find(o, "real") ?? Sym { kind: "", name: "", start: 0, end: 0 }).end, 7)
+}
+
+test "raw strings and lifetimes preserve Rust symbol ranges" {
+  let src = "fn real<'a>(x: &'a str) -> &'a str {\n    let raw = r##\"}\nfn phantom() {}\n\"# still in the string\n\"##;\n    x\n}\nfn next() {}"
+  let o = of_lines("rust", string.lines(src))
+  assert_eq(list.map(o.symbols, (s) => s.name), ["real", "next"])
+  assert_eq((find(o, "real") ?? Sym { kind: "", name: "", start: 0, end: 0 }).end, 7)
+}
+
+test "Go raw literals and Python docstrings do not invent symbols" {
+  let go = of_lines("go", string.lines("func real() {\n  x := `}\nfunc phantom() {}\n`\n  _ = x\n}\nfunc next() {}"))
+  assert_eq(list.map(go.symbols, (s) => s.name), ["real", "next"])
+  assert_eq((find(go, "real") ?? Sym { kind: "", name: "", start: 0, end: 0 }).end, 6)
+  let py = of_lines("python", string.lines("def real():\n    \"\"\"example\ndef phantom():\n    pass\n    \"\"\"\n    return 1\ndef next():\n    pass"))
+  assert_eq(list.map(py.symbols, (s) => s.name), ["real", "next"])
+  assert_eq((find(py, "real") ?? Sym { kind: "", name: "", start: 0, end: 0 }).end, 6)
 }
