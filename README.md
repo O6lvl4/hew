@@ -151,11 +151,12 @@ headers and Python decorators. Python nested classes and functions have qualifie
 paths, such as `Outer.Inner.method` and `Outer.method.helper`, so `--symbol` can
 select same-named declarations precisely. An explicit `HEW_OUTLINE_BIN` provider takes
 precedence. Unsupported languages, missing tools, invalid contracts and failed
-parses fall back to the built-in heuristics. Outline headers and selected-symbol
-labels identify `gramide`, `provider` or `heuristic`; fallback is not parser parity.
+parses use the explicit recovered-declaration contract when available, then fall
+back to the built-in heuristics. Outline headers and selected-symbol
+labels identify `gramide`, `gramide-recovered`, `provider` or `heuristic`; fallback is not parser parity.
 
 The provider contract requires language, line count and well-formed symbol ranges
-within the actual file. Gramide additionally requires schema version 1 and a
+within the actual file. The strict gramide path additionally requires schema version 1 and a
 complete parse. No tree-sitter installation is required.
 
 `hew read-json FILE --max-chars 24000` returns versioned JSON with the exact
@@ -163,3 +164,11 @@ complete parse. No tree-sitter installation is required.
 and long lines, with no display labels. Limits count Unicode characters (not
 bytes). A false `complete` means the content is a prefix, unsuitable for replacing
 the whole file. The supported limit range is 1–1,000,000 characters.
+
+For incomplete Python, hew can request `gramide symbols-recovered` after strict
+parsing fails. It validates the recovery policy, diagnostic, ordered error ranges
+and declaration ranges, rejecting declarations that overlap errors. Intact
+sibling methods remain selectable by qualified name; an enclosing class or
+function containing an error is omitted. Output says `gramide-recovered`. This
+does not make the file syntactically valid. Unhandled lexical errors and older
+gramide versions still use the labeled heuristic fallback.

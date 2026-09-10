@@ -34,4 +34,21 @@ with tempfile.TemporaryDirectory() as tmp:
  for metadata in [{},dict(manifest,schema_version=2),{'schema_version':1,'packages':[{'extensions':['.future'],'capabilities':['check']}]}]:
   install_discovery(metadata)
   assert 'future_symbol' not in run('outline',root)
+ # Recovered output is accepted only from its explicit command and policy.
+ q=root/'editing.py';source='def good(): pass\nx =\ndef next(): pass\n';q.write_text(source)
+ start=source.index('x =')
+ recovery={'schema_version':1,'complete':False,'recovery_policy':'error-free-declarations-v1','lang':'python','total_lines':3,
+           'diagnostic':'invalid statement','errors':[{'start':2,'end':2,'start_byte':start,'end_byte':start+3}],
+           'symbols':[{'kind':'function','name':'good','start':1,'end':1,'start_byte':0,'end_byte':source.index('\n')}]}
+ def install_recovery(data):
+  provider.write_text('#!'+sys.executable+'\nimport sys\nif sys.argv[1] != "symbols-recovered": sys.exit(1)\nprint('+repr(json.dumps(data))+')\n');provider.chmod(0o755)
+ install_recovery(recovery)
+ assert '; gramide-recovered)' in run('outline',q)
+ for bad in [dict(recovery,recovery_policy='unknown'),dict(recovery,errors=[]),dict(recovery,diagnostic=''),
+             dict(recovery,complete=None),dict(recovery,complete=True),dict(recovery,schema_version=2),dict(recovery,total_lines=99),
+             dict(recovery,errors=[{'start':2,'end':4,'start_byte':start,'end_byte':start+3}]),
+             dict(recovery,errors=recovery['errors']*2),
+             dict(recovery,symbols=[dict(recovery['symbols'][0],start_byte=start,end_byte=start+1)]),
+             dict(recovery,symbols=[dict(recovery['symbols'][0],start_byte=-1)])]:
+  install_recovery(bad);out=run('outline',q);assert '; heuristic)' in out,(bad,out)
 print('Provider, language discovery and lossless-read contracts passed')
