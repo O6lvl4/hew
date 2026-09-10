@@ -38,3 +38,18 @@ jobs:
         env:
           ALMIDE_BIN: ${{ github.workspace }}/.ci/almide/target/release/almide
         run: bash ci/check.sh
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: O6lvl4/gramide
+          ref: 95e57c8ba6012e98b360662f091b8ee88497f4ee
+          path: .ci/gramide
+          persist-credentials: false
+      - name: Build pinned gramide
+        working-directory: .ci/gramide
+        env:
+          ALMIDE_BIN: ${{ github.workspace }}/.ci/almide/target/release/almide
+        run: '"$ALMIDE_BIN" build'
+      - name: Real parser and reader integration
+        env:
+          GRAMIDE_BIN: ${{ github.workspace }}/.ci/gramide/gramide
+        run: python3 ci/gramide_integration.py

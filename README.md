@@ -140,3 +140,22 @@ Everything is built in. `HEW_OUTLINE_BIN` can name an external outline program w
 answer replaces the built-in rules.
 
 Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apache-2.0.
+
+## Parser-backed reading
+
+For Almide, Go and Rust, hew automatically uses `gramide symbols` when a compatible
+binary is on `PATH`. The grammar provides declaration ranges, including Rust
+attributes and multiline headers. An explicit `HEW_OUTLINE_BIN` provider takes
+precedence. Unsupported languages, missing tools, invalid contracts and failed
+parses fall back to the built-in heuristics. Outline headers and selected-symbol
+labels identify `gramide`, `provider` or `heuristic`; fallback is not parser parity.
+
+The provider contract requires language, line count and well-formed symbol ranges
+within the actual file. Gramide additionally requires schema version 1 and a
+complete parse. No tree-sitter installation is required.
+
+`hew read-json FILE --max-chars 24000` returns versioned JSON with the exact
+`content`, requested `path`, `total_chars` and `complete`. It preserves line endings
+and long lines, with no display labels. Limits count Unicode characters (not
+bytes). A false `complete` means the content is a prefix, unsuitable for replacing
+the whole file. The supported limit range is 1–1,000,000 characters.

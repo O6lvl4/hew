@@ -1,0 +1,18 @@
+import fs
+import json
+
+// Lossless machine-readable source, capped by Unicode characters. Unlike the
+// display reader, this never adds line numbers, clips lines or changes newlines.
+effect fn read(path: String, limit: Int) -> Result[Unit, String] = {
+  guard limit > 0 and limit <= 1000000 else err("--max-chars must be between 1 and 1000000")
+  let text = fs.read_text(path)!
+  let complete = string.len(text) <= limit
+  let content = if complete then text else string.take(text, limit)
+  println(json.stringify(value.object([
+    ("schema_version", value.int(1)), ("path", value.str(path)),
+    ("complete", value.bool(complete)), ("content", value.str(content)),
+    ("total_chars", value.int(string.len(text)))
+  ])))
+  ok(())
+}
+

@@ -1,11 +1,11 @@
 // outline — a file's table of contents: symbol kind, name, line range.
 //
-//   .almd              parsed here (top-level fn / effect fn / type / protocol / let / test)
+//   .almd / .rs / .go   gramide symbols when installed; heuristics otherwise
 //   rust go ts js py   parsed here from declaration lines; ranges by brace matching (or
 //                      indentation for Python). Good enough to cut a symbol out of a file.
 //   Optionally, HEW_OUTLINE_BIN names an external program (e.g. a tree-sitter one) that
 //   prints {"lang","total_lines","symbols":[{"kind","name","start","end"}]} for a path; when
-//   set, its answer wins. hew itself depends on nothing.
+//   set and valid, its answer wins. No parser is a mandatory dependency.
 import json
 import regex
 import process
@@ -13,7 +13,7 @@ import env
 import self.code_mask
 
 type Sym = { kind: String, name: String, start: Int, end: Int }
-type Outline = { lang: String, total_lines: Int, symbols: List[Sym] }
+type Outline = { lang: String, total_lines: Int, symbols: List[Sym], engine: String }
 
 
 fn lang_of(path: String) -> String =
@@ -185,14 +185,18 @@ fn qualify(lang: String, syms: List[Sym]) -> List[Sym] = {
 // ── helper (tree-sitter) ─────────────────────────────────────────────────
 fn from_json(text: String) -> Result[Outline, String] = {
   let j = json.parse(text)!
-  ok(Outline {
-    lang: json.get_string(j, "lang") ?? "unknown",
-    total_lines: json.get_int(j, "total_lines") ?? 0,
-    symbols: list.map(json.get_array(j, "symbols") ?? [], (s) => Sym {
-      kind: json.get_string(s, "kind") ?? "", name: json.get_string(s, "name") ?? "",
-      start: json.get_int(s, "start") ?? 0, end: json.get_int(s, "end") ?? 0,
-    }),
-  })
+  let lang = json.get_string(j, "lang") |> option.to_result("missing language")!
+  let total = json.get_int(j, "total_lines") |> option.to_result("missing line count")!
+  let rows = json.get_array(j, "symbols") |> option.to_result("missing symbols")!
+  var syms: List[Sym] = []
+  for row in rows {
+    let kind = json.get_string(row, "kind") |> option.to_result("missing kind")!
+    let name = json.get_string(row, "name") |> option.to_result("missing name")!
+    let start = json.get_int(row, "start") |> option.to_result("missing start")!
+    let end = json.get_int(row, "end") |> option.to_result("missing end")!
+    list.push(syms, Sym { kind: kind, name: name, start: start, end: end })
+  }
+  ok(Outline { lang: lang, total_lines: total, symbols: syms, engine: "provider" })
 }
 
 effect fn via_helper(provider: Option[String], path: String) -> Option[Outline] = match provider {
@@ -206,17 +210,45 @@ effect fn via_helper(provider: Option[String], path: String) -> Option[Outline] 
 // ── entry points ──────────────────────────────────────────────────────────
 fn of_lines(lang: String, lines: List[String]) -> Outline = {
   let syms = if lang == "almide" then almd_outline(lines) else qualify(lang, generic_outline(lang, lines))
-  Outline { lang: lang, total_lines: list.len(lines), symbols: syms }
+  Outline { lang: lang, total_lines: list.len(lines), symbols: syms, engine: "heuristic" }
 }
 
 // Outline of a file. `provider` is an optional external outline program (the HEW_OUTLINE_BIN
 // contract: called with the path, prints the outline JSON); it may know languages we do not.
+fn valid_outline(o: Outline, lang: String, total: Int) -> Bool =
+  (lang == "text" or o.lang == lang) and o.lang != "" and o.total_lines == total and list.all(o.symbols, (s) =>
+    s.name != "" and s.kind != "" and s.start >= 1 and s.end >= s.start and s.end <= total)
+
+// A strict grammar result is preferred over declaration heuristics. Older
+// gramide versions and failed parses fall back; partial JSON is never trusted.
+fn gramide_result(raw: String, lang: String, total: Int) -> Result[Outline, String] = {
+  let j = json.parse(raw)!
+  guard (json.get_int(j, "schema_version") ?? 0) == 1 else err("unsupported symbol schema")
+  guard json.get_bool(j, "complete") ?? false else err("incomplete parse")
+  let o = from_json(raw)!
+  guard valid_outline(o, lang, total) else err("invalid symbol ranges")
+  ok(Outline { ...o, engine: "gramide" })
+}
+
+effect fn gramide_read(path: String, lang: String, total: Int) -> Result[Outline, String] = {
+  let st = process.exec_status_timeout("gramide", ["symbols", path], 3000)!
+  guard st.code == 0 else err("gramide parse failed")
+  gramide_result(st.stdout, lang, total)
+}
+
+effect fn via_gramide(path: String, lang: String, total: Int) -> Option[Outline] =
+  if not list.contains(["almide", "go", "rust"], lang) then none
+  else match gramide_read(path, lang, total) { ok(o) => some(o), err(_) => none }
+
 effect fn of_file_with(path: String, lines: List[String], provider: Option[String]) -> Outline = {
   let lang = lang_of(path)
-  if lang == "almide" then of_lines(lang, lines)
-  else match via_helper(provider, path) ?? none {
-    some(o) => o,
-    none => of_lines(lang, lines),
+  let total = list.len(lines)
+  match via_helper(provider, path) ?? none {
+    some(o) => if valid_outline(o, lang, total) then o else of_lines(lang, lines),
+    none => match via_gramide(path, lang, total)! {
+      some(o) => o,
+      none => of_lines(lang, lines),
+    },
   }
 }
 
@@ -311,4 +343,11 @@ test "Go raw literals and Python docstrings do not invent symbols" {
   let py = of_lines("python", string.lines("def real():\n    \"\"\"example\ndef phantom():\n    pass\n    \"\"\"\n    return 1\ndef next():\n    pass"))
   assert_eq(list.map(py.symbols, (s) => s.name), ["real", "next"])
   assert_eq((find(py, "real") ?? Sym { kind: "", name: "", start: 0, end: 0 }).end, 6)
+}
+
+test "provider contracts reject missing fields and invalid ranges" {
+  assert(result.is_err(from_json("{}")))
+  let o = Outline { lang: "rust", total_lines: 2, engine: "provider", symbols: [Sym { kind: "fn", name: "x", start: 1, end: 3 }] }
+  assert(not valid_outline(o, "rust", 2))
+  assert(not valid_outline(Outline { ...o, symbols: ([]: List[Sym]) }, "go", 2))
 }
