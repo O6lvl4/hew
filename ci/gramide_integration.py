@@ -45,4 +45,15 @@ with tempfile.TemporaryDirectory() as tmp:
   p.write_text('def before(): return 1\nx = '+family+'"""unfinished\ndef phantom(): pass\n')
   outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
   assert '; gramide-recovered)' in outline and 'before' in outline and 'phantom' not in outline,outline
+with tempfile.TemporaryDirectory() as tmp:
+ p=Path(tmp)/'editing.py'
+ for opening in ['(','[','{']:
+  p.write_text('class Box:\n def good(self): return 1\n x = '+opening+'\n def phantom(self): pass\n')
+  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+  assert '; gramide-recovered)' in outline and 'Box.good' in outline and 'phantom' not in outline,outline
+  body=subprocess.check_output([str(hew),str(p),'--symbol','Box.good'],env=env,text=True)
+  assert 'return 1' in body and 'phantom' not in body and 'gramide-recovered' in body,body
+ p.write_text('def before(): pass\nx = (1)\ndef after(): pass\n')
+ outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+ assert '; gramide)' in outline and 'after' in outline,outline
 print('Real gramide → hew integration passed')
