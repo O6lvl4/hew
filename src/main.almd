@@ -9,6 +9,7 @@
 //   hew grep RE [path...] [--per-file N] [--max-files N]
 //   hew tree <dir> [--depth N]
 //   hew init [--global]                 write the how-to-read-code note into CLAUDE.md
+import self.read_json
 import fs
 import env
 import process
@@ -22,12 +23,13 @@ fn usage() -> String = """hew ${VERSION} — read code the way a model should
 
   hew <file> [--lines A-B] [--symbol NAME] [--grep RE] [--around N] [--head N] [--tail N] [--clip N]
   hew outline <file|dir> [--max N]
+  hew read-json <file> [--max-chars N]
   hew grep <RE> [path...] [--per-file N] [--max-files N]
   hew tree <dir> [--depth N]
   hew init [--global]                 add the note that tells an agent to read code with hew to CLAUDE.md
 
 Output is numbered so you can come back with --lines; long lines are clipped; gaps are marked.
---symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Set HEW_OUTLINE_BIN to an
+--symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Almide/Go/Rust use gramide when available; other cases use heuristics. Set HEW_OUTLINE_BIN to an
 external outline program (a path in, the outline JSON out) to override those."""
 
 // ── tiny arg parser ───────────────────────────────────────────────────────
@@ -41,7 +43,7 @@ fn has(args: List[String], name: String) -> Bool = list.contains(args, name)
 
 // Positionals: anything not an option and not an option's value.
 fn positionals(args: List[String]) -> List[String] = {
-  let valued = ["--lines", "--symbol", "--grep", "--around", "--head", "--tail", "--clip", "--max", "--per-file", "--max-files", "--depth"]
+  let valued = ["--lines", "--symbol", "--grep", "--around", "--head", "--tail", "--clip", "--max", "--per-file", "--max-files", "--depth", "--max-chars"]
   var out: List[String] = []
   var skip = false
   for a in args {
@@ -67,7 +69,7 @@ effect fn select_windows(path: String, lines: List[String], total: Int, args: Li
     some(name) => {
       let o = outline.of_file(path, lines)!
       match outline.find(o, name) {
-        some(s) => ok([view.Window { start: s.start, end: s.end, note: "${s.kind} ${s.name}" }]),
+        some(s) => ok([view.Window { start: s.start, end: s.end, note: "${s.kind} ${s.name} (${o.engine})" }]),
         none => {
           let needle = string.to_lower(name)   // a separate binding: the closure moves what it captures (almide codegen)
           let near = list.filter(o.symbols, (s) => string.contains(string.to_lower(s.name), needle))
@@ -127,7 +129,7 @@ effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
     let lines = string.lines(fs.read_text(f)!)
     let o = outline.of_file(f, lines)!
     if list.is_empty(o.symbols) and list.len(files) > 1 then () else {
-      println("# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols)")
+      println("# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols; ${o.engine})")
       for l in outline.render(o, max) { println(l) }
     }
   }
@@ -233,6 +235,7 @@ effect fn run(args: List[String]) -> Result[Unit, String] = {
   let first = list.first(args) ?? ""
   if first == "" or first == "--help" or first == "-h" then { println(usage()); ok(()) }
   else if first == "--version" then { println("hew ${VERSION}"); ok(()) }
+  else if first == "read-json" then read_json.read(list.get(positionals(args), 1) |> option.to_result("read-json needs a file")!, opt_int(args, "--max-chars", 24000))
   else if first == "outline" then cmd_outline(args)
   else if first == "grep" then cmd_grep(args)
   else if first == "tree" then cmd_tree(args)
