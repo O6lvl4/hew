@@ -1,7 +1,7 @@
 # almide.lock — auto-generated, do not edit
 
-gramide = { git = "https://github.com/O6lvl4/gramide", ref = "v0.1.0", commit = "41f68c54048001b456008c3a4f0abd93fd130ba5" }
+gramide = { git = "https://github.com/O6lvl4/gramide", ref = "v0.1.1", commit = "6b4ef9e09f0aabf91b7c8e727dbd4a1a31b41fd4" }
 gramide_almide = { git = "https://github.com/O6lvl4/gramide-almide", ref = "v0.1.0", commit = "753993e210f289f348ab9d286f2a472a07bc36ba" }
-gramide_go = { git = "https://github.com/O6lvl4/gramide-go", ref = "v0.1.0", commit = "cd0033104739d3d21b76f0ef1b7269566b6e08bd" }
-gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", ref = "v0.1.0", commit = "901b369a41c418e0e2ca2f1af8e6dcbc6b9d531d" }
+gramide_go = { git = "https://github.com/O6lvl4/gramide-go", ref = "v0.1.1", commit = "6bb010de0b0307f7bb0a6b1e85f7b165c658b3db" }
+gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", ref = "v0.1.1", commit = "5a691ab56bbb6504246af0acbe3c1d07dbe7fc6a" }
 gramide_python = { git = "https://github.com/O6lvl4/gramide-python", ref = "v0.1.0", commit = "442d836a096499503a292b89bcfca3c2ee489a91" }
