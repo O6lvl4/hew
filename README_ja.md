@@ -24,8 +24,9 @@ hew tree src --depth 2                             ディレクトリ。vcs / bu
 1 つのバイナリで、正しく、1 回で行います。
 
 - **構造を知っている。** `--symbol` で関数・型・クラス・impl のメソッド・テストを名前で切り出せます。
-  Almide、Rust、Go、TypeScript/JavaScript、Python は内蔵パーサで扱い、外部依存はありません。
-  tree-sitter の精度が欲しければ `HEW_OUTLINE_BIN` で外部の目次プログラムを差し込めます。
+  `PATH` に互換の `gramide` があれば、Almide・Rust・Go・Python の範囲はそのパーサから得ます。
+  TypeScript/JavaScript は内蔵の宣言ヒューリスティックで扱い、外部パーサなしでも動きます。
+  `HEW_OUTLINE_BIN` で別の目次プログラムを差し込むこともできます。
 - **番号とサイズが付く。** 全行に行番号が付くので、次の呼び出しは `--lines A-B` で済みます。
   長い行は切り詰め、飛ばした箇所には飛ばした行数を示します。ヘッダにはファイル全体の大きさ、
   フッタには見せた量が出ます。
@@ -106,6 +107,7 @@ almide install github.com/O6lvl4/hew      # ネイティブバイナリが 1 つ
 ```
 hew <file> [--lines A-B] [--symbol NAME] [--grep RE] [--around N] [--head N] [--tail N] [--clip N]
 hew outline <file|dir> [--max N]
+hew read-json <file> [--max-chars N]
 hew grep <RE> [path...] [--per-file N] [--max-files N] [--clip N]
 hew tree <dir> [--depth N]
 ```
@@ -124,8 +126,12 @@ hew tree <dir> [--depth N]
 
 - **view** — 表示する行範囲（ウィンドウ）を受け取り、番号付きの行、切り詰め、省略マーカー、
   ヘッダとフッタを組み立てる。
-- **outline** — ファイルの目次。Almide は専用パーサ、Rust / Go / TS・JS / Python は言語ごとの
-  宣言ルール表で宣言行を見つけ、波括弧の対応（Python はインデント）で範囲を決める。
+- **outline** — ファイルの目次。登録された言語は `gramide symbols` から範囲を得る。内蔵の
+  ヒューリスティックは Almide が専用の行ルール、Rust / Go / TS・JS / Python が言語ごとの宣言ルール表で
+  宣言行を見つけ、波括弧の対応（Python はインデント）で範囲を決める。状態を持つ字句マスクが
+  コメントとリテラル（Rust の入れ子コメントや raw 文字列、Go/Python の複数行リテラルを含む）を
+  宣言検出と範囲決定の前に隠す。それでもヒューリスティックはヒューリスティックで、複数行ヘッダや
+  JavaScript の正規表現リテラル、テンプレート補間までは完全な文法ではない。
   `find(name)` で名前から、`enclosing(line)` で行番号から、シンボルを引く。
 - **search** — ディレクトリを歩き（vcs / build / 依存 / バイナリは除外）、マッチをファイルごとに
   まとめ、同一行を畳み、上限をかけ、outline で囲んでいるシンボルを付ける。
@@ -134,3 +140,30 @@ hew tree <dir> [--depth N]
 内蔵ルールの代わりに使われます。
 
 [Almide](https://github.com/almide/almide) 製。MIT / Apache-2.0 のデュアルライセンス。
+
+## パーサに裏打ちされた読み取り
+
+`PATH` に互換の `gramide` バイナリ（[gramide-cli](https://github.com/O6lvl4/gramide-cli)）が
+あれば、hew は自動的に `gramide symbols` を試します。ディレクトリのアウトラインは
+`gramide languages` の返す `symbols` 機能付きパッケージから拡張子を追加で発見します。同梱の文法は
+Almide・Go・Rust・Python（`.py`・`.pyi`）を扱います。文法は Rust の属性や複数行ヘッダ、Python の
+デコレータを含む宣言範囲を返します。Python の入れ子クラス・関数は `Outer.Inner.method` や
+`Outer.method.helper` のような修飾パスを持つので、`--symbol` で同名の宣言を正確に選べます。
+明示した `HEW_OUTLINE_BIN` が最優先です。未対応の言語、ツール不在、契約違反、パース失敗の場合は、
+利用可能なら明示的な回復宣言の契約を使い、それも無理なら内蔵ヒューリスティックに戻ります。
+アウトラインのヘッダと選択したシンボルのラベルには `gramide`、`gramide-recovered`、`provider`、
+`heuristic` のどれで読んだかが出ます。フォールバックはパーサと同等ではありません。
+
+プロバイダの契約は、言語、行数、実ファイル内に収まる整った範囲を要求します。厳密な gramide 経路は
+さらにスキーマ版 1 と完全なパースを要求します。tree-sitter のインストールは不要です。
+
+`hew read-json FILE --max-chars 24000` は正確な `content`、要求した `path`、`total_chars`、
+`complete` をバージョン付き JSON で返します。改行と長い行をそのまま保ち、表示用ラベルは付きません。
+上限は byte ではなく Unicode 文字数で数えます。`complete` が false なら内容は先頭部分だけで、
+ファイル全体の置き換えには使えません。対応する上限は 1〜1,000,000 文字です。
+
+書きかけの Python については、厳密なパースに失敗したあと hew が `gramide symbols-recovered` を
+要求できます。回復ポリシー、診断、順序付きのエラー範囲、宣言範囲を検証し、エラーと重なる宣言は
+拒否します。無傷の兄弟メソッドは修飾名で選べたままで、エラーを含む外側のクラスや関数は省かれます。
+出力には `gramide-recovered` と表示されます。これでファイルが構文的に正しくなるわけではありません。
+未対応の字句エラーや古い gramide ではラベル付きのヒューリスティックに戻ります。

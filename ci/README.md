@@ -13,8 +13,10 @@ not a competitive benchmark or proof of general language correctness.
 `GRAMIDE_BIN=/absolute/path/to/gramide python3 ci/gramide_integration.py`
 checks the actual parser/reader boundary: Rust attributes and raw strings, plus
 Python decorators, nested same-named declarations, async methods and `.pyi`
-discovery. The GitHub workflow builds a pinned gramide with Python support and
-runs this integration test. The checks require the `gramide` engine label so a
+discovery. The GitHub workflow builds a pinned
+[gramide-cli](https://github.com/O6lvl4/gramide-cli) — the `gramide` binary,
+which fetches the engine and the four language packages at the commits its
+lock records — and runs this integration test. The checks require the `gramide` engine label so a
 heuristic fallback cannot silently pass them.
 
 Recovery integration also checks that an unfinished Python method is omitted
