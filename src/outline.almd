@@ -1,16 +1,19 @@
 // outline — a file's table of contents: symbol kind, name, line range.
 //
-//   Registered packages (including Python) use gramide symbols when installed.
-//   rust go ts js py   parsed here from declaration lines; ranges by brace matching (or
+//   almd rs go py      parsed by gramide's grammars, linked in (src/parsers.almd): strict
+//                      first, then the recovered document where the package offers one.
+//   rust go ts js py   otherwise from declaration lines; ranges by brace matching (or
 //                      indentation for Python). Good enough to cut a symbol out of a file.
 //   Optionally, HEW_OUTLINE_BIN names an external program (e.g. a tree-sitter one) that
 //   prints {"lang","total_lines","symbols":[{"kind","name","start","end"}]} for a path; when
-//   set and valid, its answer wins. No parser is a mandatory dependency.
+//   set and valid, its answer wins, for any language it knows.
 import json
 import regex
 import process
 import env
 import self.code_mask
+import self.parsers
+import gramide.symbols as structured
 
 type Sym = { kind: String, name: String, start: Int, end: Int }
 type Outline = { lang: String, total_lines: Int, symbols: List[Sym], engine: String }
@@ -219,8 +222,9 @@ fn valid_outline(o: Outline, lang: String, total: Int) -> Bool =
   (lang == "text" or o.lang == lang) and o.lang != "" and o.total_lines == total and list.all(o.symbols, (s) =>
     s.name != "" and s.kind != "" and s.start >= 1 and s.end >= s.start and s.end <= total)
 
-// A strict grammar result is preferred over declaration heuristics. Older
-// gramide versions fall back; recovery requires the separate validated contract.
+// A strict grammar result is preferred over declaration heuristics. The
+// document is checked the way a provider's is, even though it came from this
+// process: the schema is the one contract every source of an outline speaks.
 fn gramide_result(raw: String, lang: String, total: Int) -> Result[Outline, String] = {
   let j = json.parse(raw)!
   guard (json.get_int(j, "schema_version") ?? 0) == 1 else err("unsupported symbol schema")
@@ -275,32 +279,39 @@ fn recovered_result(raw: String, lang: String, total: Int) -> Result[Outline, St
     ok(Outline { ...o, engine: "gramide-recovered" })
   }
 }
-effect fn gramide_read(path: String, lang: String, total: Int) -> Result[Outline, String] = {
-  let st = process.exec_status_timeout("gramide", ["symbols", path], 3000)!
-  if st.code == 0 then gramide_result(st.stdout, lang, total)
-  else {
-    let partial = process.exec_status_timeout("gramide", ["symbols-recovered", path], 3000)!
-    guard partial.code == 0 else err("gramide recovery unavailable")
-    recovered_result(partial.stdout, lang, total)
-  }
-}
-
-effect fn via_gramide(path: String, lang: String, total: Int) -> Option[Outline] =
-  match gramide_read(path, lang, total) { ok(o) => some(o), err(_) => none }
-
-effect fn of_file_with(path: String, lines: List[String], provider: Option[String]) -> Outline = {
-  let lang = lang_of(path)
-  let total = list.len(lines)
-  match via_helper(provider, path) ?? none {
-    some(o) => if valid_outline(o, lang, total) then o else of_lines(lang, lines),
-    none => match via_gramide(path, lang, total)! {
-      some(o) => o,
-      none => of_lines(lang, lines),
+// The strict document, then the recovered one where the package offers it —
+// both in this process: the grammars are linked, not found on PATH, so a
+// directory outline costs a parse per file rather than a process per file.
+fn gramide_read(path: String, text: String, lang: String, total: Int) -> Result[Outline, String] =
+  match structured.document(parsers.packages(), path, text) {
+    ok(raw) => gramide_result(raw, lang, total),
+    err(_) => {
+      let raw = structured.recovered_document(parsers.packages(), path, text)!
+      recovered_result(raw, lang, total)
     },
   }
+
+fn via_gramide(path: String, text: String, lang: String, total: Int) -> Option[Outline] =
+  match gramide_read(path, text, lang, total) { ok(o) => some(o), err(_) => none }
+
+fn linked_or_heuristic(path: String, text: String, lang: String, lines: List[String], total: Int) -> Outline =
+  match via_gramide(path, text, lang, total) {
+    some(o) => o,
+    none => of_lines(lang, lines),
+  }
+
+effect fn of_file_with(path: String, text: String, lines: List[String], provider: Option[String]) -> Outline = {
+  let lang = lang_of(path)
+  let total = list.len(lines)
+  // an explicit provider wins when it keeps the contract; one that does not is
+  // ignored, and the linked grammar answers before any heuristic does
+  match via_helper(provider, path) ?? none {
+    some(o) => if valid_outline(o, lang, total) then o else linked_or_heuristic(path, text, lang, lines, total),
+    none => linked_or_heuristic(path, text, lang, lines, total),
+  }
 }
 
-effect fn of_file(path: String, lines: List[String]) -> Outline = of_file_with(path, lines, env.get("HEW_OUTLINE_BIN"))
+effect fn of_file(path: String, text: String, lines: List[String]) -> Outline = of_file_with(path, text, lines, env.get("HEW_OUTLINE_BIN"))
 
 // Exact name first, then a suffix match so `compile` finds `Compiler::compile`.
 fn find(o: Outline, name: String) -> Option[Sym] =
@@ -321,7 +332,9 @@ fn enclosing(o: Outline, n: Int) -> Option[Sym] = {
 fn pad_right(s: String, width: Int) -> String =
   if string.len(s) >= width then s else s + string.repeat(" ", width - string.len(s))
 
-fn render(o: Outline, max: Int) -> List[String] = {
+// `render_rows`, not `render`: the test harness compiles gramide.tags beside this
+// module without prefixes, and that has a `render` of its own.
+fn render_rows(o: Outline, max: Int) -> List[String] = {
   let shown = list.take(o.symbols, max)
   let rows = list.map(shown, (s) => "  ${pad_right(s.kind, 9)} ${pad_right(s.name, 40)} L${int.to_string(s.start)}-${int.to_string(s.end)}")
   if list.len(o.symbols) > max then rows + ["  … ${int.to_string(list.len(o.symbols) - max)} more (--max N)"] else rows
@@ -400,19 +413,35 @@ test "provider contracts reject missing fields and invalid ranges" {
   assert(not valid_outline(Outline { ...o, symbols: ([]: List[Sym]) }, "go", 2))
 }
 
-// Directory scans discover new extensions from package metadata. Older
-// gramide builds simply return no extra extensions; built-ins still work.
-effect fn registered_extensions() -> List[String] = {
-  match process.exec_status_timeout("gramide", ["languages"], 3000) {
-    err(_) => [],
-    ok(st) => if st.code != 0 then [] else match json.parse(st.stdout) {
-      err(_) => [],
-      ok(j) => if (json.get_int(j, "schema_version") ?? 0) != 1 then [] else
-        list.flat_map(json.get_array(j, "packages") ?? [], (p) => {
-          let caps = list.filter_map(json.get_array(p, "capabilities") ?? [], (v) => match value.as_string(v) { ok(s) => some(s), err(_) => none })
-          if not list.contains(caps, "symbols") then [] else
-            list.filter(list.filter_map(json.get_array(p, "extensions") ?? [], (v) => match value.as_string(v) { ok(s) => some(s), err(_) => none }), (ext) => string.starts_with(ext, ".") and string.len(ext) > 1)
-        }),
-    },
-  }
+// A directory scan reads every extension a linked package answers `symbols`
+// for, beyond the languages hew knows on its own: `.pyi` comes from here.
+fn registered_extensions() -> List[String] = parsers.extensions_with("symbols")
+
+test "a structured document is accepted only when complete, schema 1 and in range" {
+  let good = """{"schema_version":1,"complete":true,"lang":"rust","total_lines":4,"symbols":[{"kind":"function","name":"real","start":1,"end":4}]}"""
+  assert_eq((gramide_result(good, "rust", 4)!).engine, "gramide")
+  assert_eq(list.map((gramide_result(good, "rust", 4)!).symbols, (s) => s.name), ["real"])
+  assert(result.is_err(gramide_result("{}", "rust", 4)))
+  assert(result.is_err(gramide_result(good, "rust", 99)))
+  assert(result.is_err(gramide_result("""{"schema_version":2,"complete":true,"lang":"rust","total_lines":4,"symbols":[]}""", "rust", 4)))
+  assert(result.is_err(gramide_result("""{"schema_version":1,"complete":false,"lang":"rust","total_lines":4,"symbols":[]}""", "rust", 4)))
+  assert(result.is_err(gramide_result("""{"schema_version":1,"complete":true,"lang":"rust","total_lines":4,"symbols":[{"kind":"fn","name":"bad","start":0,"end":9}]}""", "rust", 4)))
+}
+
+test "a recovered document needs its policy, a diagnostic, ordered ranges and symbols outside them" {
+  let head = """{"schema_version":1,"complete":false,"recovery_policy":"error-free-declarations-v1","lang":"python","total_lines":3,"diagnostic":"invalid statement","""
+  let errors = """"errors":[{"start":2,"end":2,"start_byte":17,"end_byte":20}],"""
+  let good = head + errors + """"symbols":[{"kind":"function","name":"good","start":1,"end":1,"start_byte":0,"end_byte":16}]}"""
+  assert_eq((recovered_result(good, "python", 3)!).engine, "gramide-recovered")
+  // an unknown policy, no errors, no diagnostic, a range past the file, or a symbol inside an error
+  assert(result.is_err(recovered_result(string.replace(good, "error-free-declarations-v1", "unknown"), "python", 3)))
+  assert(result.is_err(recovered_result(head + """"errors":[],"symbols":[]}""", "python", 3)))
+  assert(result.is_err(recovered_result(string.replace(good, "invalid statement", ""), "python", 3)))
+  assert(result.is_err(recovered_result(string.replace(good, "\"end\":2", "\"end\":4"), "python", 3)))
+  assert(result.is_err(recovered_result(head + errors + """"symbols":[{"kind":"function","name":"good","start":1,"end":1,"start_byte":17,"end_byte":18}]}""", "python", 3)))
+  assert(result.is_err(recovered_result(good, "python", 99)))
+  // complete: true is accepted only with no errors and no diagnostic
+  let complete = string.replace(string.replace(string.replace(good, "\"complete\":false", "\"complete\":true"), "invalid statement", ""), errors, """"errors":[],""")
+  assert_eq((recovered_result(complete, "python", 3)!).engine, "gramide")
+  assert(result.is_err(recovered_result(string.replace(good, "\"complete\":false", "\"complete\":true"), "python", 3)))
 }

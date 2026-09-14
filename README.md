@@ -25,9 +25,10 @@ model has to find first, `grep -n` results say nothing about *where* a match is)
 does the narrowing properly, once, in one binary:
 
 - **Structure-aware.** `--symbol` cuts out a function, type, class, impl method or test by
-  name. A compatible `gramide` supplies parser-backed ranges for Almide, Rust, Go and
-  Python. Built-in declaration heuristics also cover TypeScript/JavaScript and work
-  without an external parser. `HEW_OUTLINE_BIN` selects another outline provider.
+  name. Almide, Rust, Go and Python are parsed by [gramide](https://github.com/O6lvl4/gramide)'s
+  grammars, linked into the binary; a Python file halfway through an edit is read through
+  its recovered declarations. Declaration heuristics cover TypeScript/JavaScript.
+  `HEW_OUTLINE_BIN` plugs in an outline provider for any other language.
 - **Numbered and sized.** Every line carries its number so the next call can be
   `--lines A-B`. Long lines are clipped. Gaps are marked with how many lines were skipped.
   The header says how big the whole file is; the footer says how much was shown.
@@ -84,11 +85,12 @@ $ hew src/lower.rs --grep "Expr::Match" --around 2
 almide install github.com/O6lvl4/hew      # one native binary → ~/.local/bin/hew
 ```
 
-One binary, no runtime, no other tools required. Optionally, `HEW_OUTLINE_BIN=<program>`
-names an outline provider (called with a path, must print
+One binary, no runtime, no other tools required: the parsers are inside it, and
+`hew --version` names the engine and grammar versions it was built with. Optionally,
+`HEW_OUTLINE_BIN=<program>` names an outline provider (called with a path, must print
 `{"lang","total_lines","symbols":[{"kind","name","start","end"}]}`); when set, its answer is
 used for `--symbol`, `outline` and grep labels, for any language it knows. Any tree-sitter
-based tool that speaks this contract can be plugged in; hew itself does not know or need any.
+based tool that speaks this contract can be plugged in.
 
 ## Teach your agent
 
@@ -126,38 +128,46 @@ composes three modules:
 
 - **view** — takes the line windows to show and produces numbered lines, clipping, gap
   markers, header and footer.
-- **outline** — the table of contents. Almide has its own parser; Rust / Go / TS·JS / Python
-  use a per-language table of declaration rules and get their ranges from brace matching
-  (indentation for Python). A stateful lexical mask hides comments and literals
-  before declaration detection and range matching, including Rust nested comments/raw
-  strings and Go/Python multiline literals. These remain declaration heuristics:
-  multiline headers, JavaScript regex literals and template interpolation are not a
-  full grammar. `find(name)` looks a symbol up by name, `enclosing(line)` by line.
+- **outline** — the table of contents. Almide, Rust, Go and Python are parsed by the
+  gramide grammars in **parsers** (strict first, then the recovered document where the
+  package offers one). Otherwise a per-language table of declaration rules finds
+  declaration lines and brace matching (indentation for Python) finds their ranges, behind
+  a stateful lexical mask that hides comments and literals, including Rust nested
+  comments/raw strings and Go/Python multiline literals. Those remain heuristics:
+  multiline headers, JavaScript regex literals and template interpolation are not a full
+  grammar. `find(name)` looks a symbol up by name, `enclosing(line)` by line.
 - **search** — walks directories (skipping vcs / build / deps / binaries), groups matches per
   file, folds identical lines, applies caps, and asks outline for the enclosing symbol.
 
-Everything is built in. `HEW_OUTLINE_BIN` can name an external outline program whose JSON
-answer replaces the built-in rules.
+Everything is built in, the grammars included. `HEW_OUTLINE_BIN` can name an external
+outline program whose JSON answer replaces the built-in rules.
 
 Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apache-2.0.
 
 ## Parser-backed reading
 
-hew automatically tries `gramide symbols` when a compatible binary is on `PATH`.
-Directory outlines discover extra file extensions from `gramide languages` packages
-with the `symbols` capability. The bundled grammars cover Almide, Go, Rust and Python (`.py`, `.pyi`).
-The grammar provides declaration ranges, including Rust attributes, multiline
-headers and Python decorators. Python nested classes and functions have qualified
-paths, such as `Outer.Inner.method` and `Outer.method.helper`, so `--symbol` can
-select same-named declarations precisely. An explicit `HEW_OUTLINE_BIN` provider takes
-precedence. Unsupported languages, missing tools, invalid contracts and failed
-parses use the explicit recovered-declaration contract when available, then fall
-back to the built-in heuristics. Outline headers and selected-symbol
-labels identify `gramide`, `gramide-recovered`, `provider` or `heuristic`; fallback is not parser parity.
+hew links [gramide](https://github.com/O6lvl4/gramide) — the engine — and its
+four language packages ([Almide](https://github.com/O6lvl4/gramide-almide),
+[Go](https://github.com/O6lvl4/gramide-go), [Rust](https://github.com/O6lvl4/gramide-rust),
+[Python 3.14](https://github.com/O6lvl4/gramide-python)) as ordinary Almide
+dependencies, pinned in `almide.lock`: the same composition the `gramide`
+command ships, called in-process, so a directory outline costs a parse per
+file rather than a process per file, and nothing has to be on `PATH`.
+Directory outlines read every extension a linked package answers `symbols`
+for, `.pyi` included. The grammar provides declaration ranges, including Rust
+attributes, multiline headers and Python decorators. Python nested classes and
+functions have qualified paths, such as `Outer.Inner.method` and
+`Outer.method.helper`, so `--symbol` can select same-named declarations
+precisely. An explicit `HEW_OUTLINE_BIN` provider takes precedence. A failed
+parse uses the explicit recovered-declaration contract where the package
+offers one, then the built-in heuristics. Outline headers and selected-symbol
+labels identify `gramide`, `gramide-recovered`, `provider` or `heuristic`;
+fallback is not parser parity.
 
-The provider contract requires language, line count and well-formed symbol ranges
-within the actual file. The strict gramide path additionally requires schema version 1 and a
-complete parse. No tree-sitter installation is required.
+The document each source produces is checked the same way — language, line
+count, well-formed ranges within the actual file, and for the strict grammar
+path schema version 1 and a complete parse — whether it came from the linked
+engine or from a provider. No tree-sitter installation is required.
 
 `hew read-json FILE --max-chars 24000` returns versioned JSON with the exact
 `content`, requested `path`, `total_chars` and `complete`. It preserves line endings
@@ -165,10 +175,10 @@ and long lines, with no display labels. Limits count Unicode characters (not
 bytes). A false `complete` means the content is a prefix, unsuitable for replacing
 the whole file. The supported limit range is 1–1,000,000 characters.
 
-For incomplete Python, hew can request `gramide symbols-recovered` after strict
-parsing fails. It validates the recovery policy, diagnostic, ordered error ranges
-and declaration ranges, rejecting declarations that overlap errors. Intact
-sibling methods remain selectable by qualified name; an enclosing class or
-function containing an error is omitted. Output says `gramide-recovered`. This
-does not make the file syntactically valid. Unhandled lexical errors and older
-gramide versions still use the labeled heuristic fallback.
+For incomplete Python, hew reads the recovered document after strict parsing
+fails. It validates the recovery policy, diagnostic, ordered error ranges and
+declaration ranges, rejecting declarations that overlap errors. Intact sibling
+methods remain selectable by qualified name; an enclosing class or function
+containing an error is omitted. Output says `gramide-recovered`. This does not
+make the file syntactically valid; damage the package cannot bound still uses
+the labeled heuristic fallback.

@@ -16,8 +16,9 @@ import process
 import self.view
 import self.outline
 import self.search
+import self.parsers
 
-let VERSION = "0.1.0"
+let VERSION = "0.2.0"
 
 fn usage() -> String = """hew ${VERSION} — read code the way a model should
 
@@ -29,8 +30,10 @@ fn usage() -> String = """hew ${VERSION} — read code the way a model should
   hew init [--global]                 add the note that tells an agent to read code with hew to CLAUDE.md
 
 Output is numbered so you can come back with --lines; long lines are clipped; gaps are marked.
---symbol knows Almide, Rust, Go, TypeScript/JavaScript and Python. Almide/Go/Rust/Python use gramide when available; recovered Python declarations are labeled. Other cases use heuristics. Set HEW_OUTLINE_BIN to an
-external outline program (a path in, the outline JSON out) to override those."""
+--symbol knows Almide, Rust, Go and Python through gramide's grammars, built in (a Python file mid-edit
+is read through its recovered declarations, and labelled so), and TypeScript/JavaScript through
+declaration heuristics. Set HEW_OUTLINE_BIN to an external outline program (a path in, the outline
+JSON out) for any other language."""
 
 // ── tiny arg parser ───────────────────────────────────────────────────────
 fn opt(args: List[String], name: String) -> Option[String] =
@@ -64,10 +67,10 @@ fn parse_range(s: String) -> Option[(Int, Int)] = match string.split_once(s, "-"
 }
 
 // Which lines to show, from the options. Errors name what to do instead.
-effect fn select_windows(path: String, lines: List[String], total: Int, args: List[String], around: Int) -> Result[List[view.Window], String] = {
+effect fn select_windows(path: String, text: String, lines: List[String], total: Int, args: List[String], around: Int) -> Result[List[view.Window], String] = {
   match opt(args, "--symbol") {
     some(name) => {
-      let o = outline.of_file(path, lines)!
+      let o = outline.of_file(path, text, lines)!
       match outline.find(o, name) {
         some(s) => ok([view.Window { start: s.start, end: s.end, note: "${s.kind} ${s.name} (${o.engine})" }]),
         none => {
@@ -87,7 +90,7 @@ effect fn select_windows(path: String, lines: List[String], total: Int, args: Li
         some(pat) => {
           let ws = view.grep_windows(lines, pat, around)
           guard not list.is_empty(ws) else err("no line in ${path} matches /${pat}/")
-          let o = outline.of_file(path, lines)!
+          let o = outline.of_file(path, text, lines)!
           ok(list.map(ws, (w) => view.Window { ...w, note: match outline.enclosing(o, w.start + around) { some(s) => "in ${s.kind} ${s.name}", none => "" } }))
         },
         none => match opt(args, "--head") {
@@ -110,7 +113,7 @@ effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
   let total = list.len(lines)
   let clip_at = opt_int(args, "--clip", view.CLIP)
   let around = opt_int(args, "--around", 3)
-  let windows = select_windows(path, lines, total, args, around)!
+  let windows = select_windows(path, text, lines, total, args, around)!
   let body = view.render_windows(lines, windows, clip_at)
   println(view.header(path, total, string.len(text)))
   for l in body { println(l) }
@@ -123,15 +126,16 @@ effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
 effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
   let target = list.get(positionals(args), 1) ?? "."
   let max = opt_int(args, "--max", 120)
-  let extensions = if fs.is_dir(target) then outline.registered_extensions()! else ([]: List[String])
+  let extensions = if fs.is_dir(target) then outline.registered_extensions() else ([]: List[String])
   let files = if fs.is_dir(target) then search.collect([target])! |> list.filter((f) => outline.lang_of(f) != "text" or list.any(extensions, (ext) => string.ends_with(f, ext))) else [target]
   guard not list.is_empty(files) else err("nothing to outline under ${target}")
   for f in files {
-    let lines = string.lines(fs.read_text(f)!)
-    let o = outline.of_file(f, lines)!
+    let text = fs.read_text(f)!
+    let lines = string.lines(text)
+    let o = outline.of_file(f, text, lines)!
     if list.is_empty(o.symbols) and list.len(files) > 1 then () else {
       println("# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols; ${o.engine})")
-      for l in outline.render(o, max) { println(l) }
+      for l in outline.render_rows(o, max) { println(l) }
     }
   }
   ok(())
@@ -235,7 +239,7 @@ effect fn cmd_init(global: Bool) -> Result[Unit, String] = {
 effect fn run(args: List[String]) -> Result[Unit, String] = {
   let first = list.first(args) ?? ""
   if first == "" or first == "--help" or first == "-h" then { println(usage()); ok(()) }
-  else if first == "--version" then { println("hew ${VERSION}"); ok(()) }
+  else if first == "--version" then { println(list.join(["hew ${VERSION}"] + parsers.versions(), "\n")); ok(()) }
   else if first == "read-json" then read_json.read(list.get(positionals(args), 1) |> option.to_result("read-json needs a file")!, opt_int(args, "--max-chars", 24000))
   else if first == "outline" then cmd_outline(args)
   else if first == "grep" then cmd_grep(args)

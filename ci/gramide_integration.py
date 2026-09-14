@@ -1,9 +1,8 @@
-"""Exercise the real parser/reader contract, not a mock provider."""
+"""Exercise the linked grammars through hew itself, not a mock provider."""
 from pathlib import Path
 import os,subprocess,tempfile
 hew=Path(__file__).resolve().parents[1]/'hew'
-gramide=Path(os.environ['GRAMIDE_BIN']).resolve()
-env=dict(os.environ,PATH=str(gramide.parent)+os.pathsep+os.environ.get('PATH',''),HEW_OUTLINE_BIN='')
+env=dict(os.environ,HEW_OUTLINE_BIN='')
 with tempfile.TemporaryDirectory() as tmp:
  p=Path(tmp)/'sample.rs'
  p.write_text('#[inline]\npub fn\nreal() {\n let raw = r#"}\nfn phantom() {}\n"#;\n}\n')
@@ -68,4 +67,4 @@ with tempfile.TemporaryDirectory() as tmp:
  p.write_text('def broken$():\n def phantom(): pass\ndef real(): pass\n')
  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
  assert '; gramide-recovered)' in outline and 'real' in outline and 'phantom' not in outline,outline
-print('Real gramide → hew integration passed')
+print('Linked grammars passed: Rust envelopes, Python nesting and stubs, recovered declarations around every kind of damage')

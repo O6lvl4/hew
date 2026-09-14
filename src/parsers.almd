@@ -1,0 +1,28 @@
+// parsers — the grammars hew links: gramide's engine and its language
+// packages, the same composition the `gramide` binary ships, so `--symbol`,
+// `outline` and grep labels are parser-backed without anything on PATH. The
+// versions are the ones almide.lock pins, and `hew --version` prints them.
+import gramide.package_api
+import gramide as engine
+import gramide_almide
+import gramide_go
+import gramide_rust
+import gramide_python
+
+fn packages() -> List[package_api.Definition] =
+  [gramide_almide.definition(), gramide_go.definition(), gramide_rust.definition(), gramide_python.definition()]
+
+// The extensions some linked package answers `capability` for: what a
+// directory outline reads beyond the languages hew knows on its own.
+fn extensions_with(capability: String) -> List[String] =
+  list.flat_map(packages(), (d) => if list.contains(d.capabilities, capability) then d.extensions else ([]: List[String]))
+
+fn versions() -> List[String] =
+  ["gramide " + engine.version() + " (engine)"]
+  + list.map(packages(), (d) => d.package_name + " " + d.version + " (" + list.join(d.extensions, " ") + ")")
+
+test "the linked packages answer symbols for their extensions" {
+  let exts = extensions_with("symbols")
+  assert(list.contains(exts, ".py") and list.contains(exts, ".pyi") and list.contains(exts, ".rs") and list.contains(exts, ".go") and list.contains(exts, ".almd"))
+  assert_eq(list.len(versions()), 5)
+}

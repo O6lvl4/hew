@@ -61,7 +61,8 @@ effect fn search_file(path: String, pat: String, per_file: Int) -> Option[FileHi
   let lines = string.lines(text)
   let matched = list.enumerate(lines) |> list.filter((p) => regex.is_match(pat, p.1))
   guard not list.is_empty(matched) else none
-  let o = outline.of_lines(outline.lang_of(path), lines)
+  // parser-backed where a grammar is linked: a grep label names the real enclosing symbol
+  let o = outline.of_file(path, text, lines)!
   let hits = list.map(matched, (p) => Hit {
     line: p.0 + 1, text: p.1,
     sym: match outline.enclosing(o, p.0 + 1) { some(s) => s.name, none => "" },

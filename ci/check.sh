@@ -6,6 +6,7 @@ compiler="${ALMIDE_BIN:-almide}"
 "$compiler" build
 python3 ci/smoke.py
 python3 ci/providers.py
+python3 ci/gramide_integration.py
 
 # A per-file ratchet, not a target: the lowest of any repository here, and the one worth defending.
 # Each file is held where it stands, so a clean one cannot rot up to the worst
