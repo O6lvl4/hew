@@ -143,6 +143,22 @@ hew tree <dir> [--depth N]
 
 ## パーサに裏打ちされた読み取り
 
+## ast-grep の outline との比較
+
+`ast-grep outline`（0.45）は、コーディングエージェントが今日呼べるもう一つの構造を知る
+目次で、tree-sitter の文法の上に載っている。この機械で、毎回新しいプロセスを起動し、
+5 回の最小値を取った計測（[証拠](docs/evidence/ast-grep-outline.json)）:
+
+| | ファイル | hew | ast-grep |
+|---|---:|---:|---:|
+| Node `lib/`（JavaScript） | 427 | 0.057 秒 | 0.053 秒 |
+| TypeScript 5.9 `src/` | 701 | 0.200 秒 | 0.157 秒 |
+
+3 つ目のメンバーのヘッダが壊れたクラス（`broken( {`）では、hew は回復パースから無事な
+2 つのメソッドとクラスの後の関数を `gramide-recovered` のラベル付きで列挙し、ast-grep は
+`nothing found` と答える。hew に無いのは ast-grep の言語数で、tree-sitter の数百に対して
+文法は 6 つ。残りは `HEW_OUTLINE_BIN` の契約で差し込む。
+
 hew は [gramide](https://github.com/O6lvl4/gramide)（エンジン）と 6 つの言語パッケージ
 （[Almide](https://github.com/O6lvl4/gramide-almide)・[Go](https://github.com/O6lvl4/gramide-go)・
 [Rust](https://github.com/O6lvl4/gramide-rust)・[Python 3.14](https://github.com/O6lvl4/gramide-python)・

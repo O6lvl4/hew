@@ -145,6 +145,23 @@ outline program whose JSON answer replaces the built-in rules.
 
 Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apache-2.0.
 
+## Against ast-grep's outline
+
+`ast-grep outline` (0.45) is the other structure-aware outline a coding agent can
+call today, over tree-sitter grammars. Measured on this machine, fresh processes,
+minimum of five runs ([evidence](docs/evidence/ast-grep-outline.json)):
+
+| | files | hew | ast-grep |
+|---|---:|---:|---:|
+| Node `lib/` (JavaScript) | 427 | 0.057 s | 0.053 s |
+| TypeScript 5.9 `src/` | 701 | 0.200 s | 0.157 s |
+
+On a class whose third member's header is broken (`broken( {`), hew lists the two
+intact methods and the function after the class from the recovered parse, labelled
+`gramide-recovered`; ast-grep answers `nothing found`. What hew does not have is
+ast-grep's language count: six grammars against tree-sitter's hundreds, with the
+`HEW_OUTLINE_BIN` contract as the way to plug the rest in.
+
 ## Parser-backed reading
 
 hew links [gramide](https://github.com/O6lvl4/gramide) — the engine — and its
