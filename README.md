@@ -149,12 +149,12 @@ Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apach
 
 `ast-grep outline` (0.45) is the other structure-aware outline a coding agent can
 call today, over tree-sitter grammars. Measured on this machine, fresh processes,
-minimum of five runs ([evidence](docs/evidence/ast-grep-outline.json)):
+minimum of nine runs ([evidence](docs/evidence/ast-grep-outline.json)):
 
 | | files | hew | ast-grep |
 |---|---:|---:|---:|
-| Node `lib/` (JavaScript) | 427 | 0.055 s | 0.053 s |
-| TypeScript 5.9 `src/` | 701 | 0.136 s | 0.169 s |
+| Node `lib/` (JavaScript) | 427 | 0.059 s | 0.057 s |
+| TypeScript 5.9 `src/` | 701 | 0.153 s | 0.172 s |
 
 The TypeScript number is bounded by one file: `checker.ts` is 3.1 MB and parses in
 about 0.10 s, and no arm can finish before the arm holding it. The files are dealt

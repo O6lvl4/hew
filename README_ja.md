@@ -147,12 +147,12 @@ hew tree <dir> [--depth N]
 
 `ast-grep outline`（0.45）は、コーディングエージェントが今日呼べるもう一つの構造を知る
 目次で、tree-sitter の文法の上に載っている。この機械で、毎回新しいプロセスを起動し、
-5 回の最小値を取った計測（[証拠](docs/evidence/ast-grep-outline.json)）:
+9 回の最小値を取った計測（[証拠](docs/evidence/ast-grep-outline.json)）:
 
 | | ファイル | hew | ast-grep |
 |---|---:|---:|---:|
-| Node `lib/`（JavaScript） | 427 | 0.055 秒 | 0.053 秒 |
-| TypeScript 5.9 `src/` | 701 | 0.136 秒 | 0.169 秒 |
+| Node `lib/`（JavaScript） | 427 | 0.059 秒 | 0.057 秒 |
+| TypeScript 5.9 `src/` | 701 | 0.153 秒 | 0.172 秒 |
 
 TypeScript の数字は 1 ファイルで決まる。`checker.ts` は 3.1 MB でパースに約 0.10 秒かかり、
 それを持つアームより先に終われるアームはない。ファイルは大きい順に、その時点で最もバイト数の

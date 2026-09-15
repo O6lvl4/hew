@@ -1,22 +1,22 @@
 {
   "platform": "macOS-26.3-arm64-arm-64bit-Mach-O",
   "cpus": 14,
-  "samples": 5,
+  "samples": 9,
   "ast_grep_version": "ast-grep 0.45.3",
-  "hew_version": "hew 0.4.0",
+  "hew_version": "hew 0.4.1",
   "directories": [
     {
       "dir": "/Users/o6lvl4/workspace/github.com/O6lvl4/almide-references/node/lib",
       "files": 427,
       "bytes": 5717799,
       "hew": {
-        "min_seconds": 0.0552,
-        "median_seconds": 0.0556,
+        "min_seconds": 0.0594,
+        "median_seconds": 0.0603,
         "output_lines": 11872
       },
       "ast_grep": {
-        "min_seconds": 0.0526,
-        "median_seconds": 0.0573,
+        "min_seconds": 0.0565,
+        "median_seconds": 0.0587,
         "output_lines": 400
       }
     },
@@ -25,13 +25,13 @@
       "files": 701,
       "bytes": 20577682,
       "hew": {
-        "min_seconds": 0.136,
-        "median_seconds": 0.1365,
+        "min_seconds": 0.1529,
+        "median_seconds": 0.1557,
         "output_lines": 49193
       },
       "ast_grep": {
-        "min_seconds": 0.1686,
-        "median_seconds": 0.1804,
+        "min_seconds": 0.1718,
+        "median_seconds": 0.1848,
         "output_lines": 580
       }
     }
