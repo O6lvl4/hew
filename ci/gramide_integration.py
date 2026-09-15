@@ -67,4 +67,35 @@ with tempfile.TemporaryDirectory() as tmp:
  p.write_text('def broken$():\n def phantom(): pass\ndef real(): pass\n')
  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
  assert '; gramide-recovered)' in outline and 'real' in outline and 'phantom' not in outline,outline
-print('Linked grammars passed: Rust envelopes, Python nesting and stubs, recovered declarations around every kind of damage')
+with tempfile.TemporaryDirectory() as tmp:
+ for ext in ['js','mjs','cjs']:
+  p=Path(tmp)/('sample.'+ext)
+  p.write_text('export default class Widget extends Base {\n  static #n = 0\n  get size() { return /re/.test(this.x) ? 1 : 2 }\n  static of(...xs) { return new Widget(xs[0]) }\n}\nexport const helper = async (a, b = 2) => a ** b\nconst handlers = { onClick() { return `x${1}y` } }\n')
+  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+  assert '; gramide)' in outline and 'Widget.size' in outline and 'function  helper' in outline and 'handlers.onClick' in outline,outline
+  body=subprocess.check_output([str(hew),str(p),'--symbol','Widget.of'],env=env,text=True)
+  assert 'new Widget' in body and 'helper' not in body and '(gramide)' in body,body
+  body=subprocess.check_output([str(hew),str(p),'--symbol','helper'],env=env,text=True)
+  assert 'export const helper' in body and 'onClick' not in body,body
+ p=Path(tmp)/'editing.js'
+ p.write_text('export class Box {\n  read() { return 1 }\n  broken( {\n  also(x) { return x }\n}\nexport function f() {}\nfunction g( {\nfunction h() {}\n')
+ outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+ assert '; gramide-recovered)' in outline and 'Box.read' in outline and 'Box.also' in outline and 'function  f' in outline and 'function  h' in outline and 'broken' not in outline and ' g ' not in outline,outline
+ for name,text in [('Box.also','return x'),('h','function h')]:
+  body=subprocess.check_output([str(hew),str(p),'--symbol',name],env=env,text=True)
+  assert text in body and 'broken' not in body and 'gramide-recovered' in body,(name,body)
+with tempfile.TemporaryDirectory() as tmp:
+ for ext in ['ts','mts','cts']:
+  p=Path(tmp)/('sample.'+ext)
+  p.write_text('export interface Shape { area(): number }\nexport abstract class Box<T> implements Shape {\n  constructor(private readonly x: T) {}\n  abstract area(): number\n  size(): number { return (this.x as unknown as number) ** 2 }\n}\nexport const make = <T,>(x: T): Box<T> => new Impl<T>(x)\nexport namespace ns { export type Id<T> = T extends infer U ? U : never }\n')
+  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+  assert '; gramide)' in outline and 'Shape.area' in outline and 'Box.constructor' in outline and 'function  make' in outline and 'namespace ns' in outline and 'type      ns.Id' in outline,outline
+  body=subprocess.check_output([str(hew),str(p),'--symbol','Box.size'],env=env,text=True)
+  assert '** 2' in body and 'constructor' not in body and '(gramide)' in body,body
+ p=Path(tmp)/'editing.ts'
+ p.write_text('export class Box {\n  read(): number { return 1 }\n  broken(: {\n  also(x: string) { return x }\n}\nexport function f(): void {}\n')
+ outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+ assert '; gramide-recovered)' in outline and 'Box.read' in outline and 'Box.also' in outline and 'function  f' in outline and 'broken' not in outline,outline
+ body=subprocess.check_output([str(hew),str(p),'--symbol','Box.also'],env=env,text=True)
+ assert 'return x' in body and 'broken' not in body and 'gramide-recovered' in body,body
+print('Linked grammars passed: Rust envelopes, Python nesting and stubs, JavaScript and TypeScript declarations, recovered declarations around every kind of damage')

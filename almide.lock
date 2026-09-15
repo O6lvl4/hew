@@ -5,3 +5,5 @@ gramide_almide = { git = "https://github.com/O6lvl4/gramide-almide", ref = "v0.1
 gramide_go = { git = "https://github.com/O6lvl4/gramide-go", ref = "v0.1.2", commit = "34980f94b4b8b35075464c501e1645c2bae54dbf" }
 gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", ref = "v0.1.2", commit = "b8245c6eae4b311c911f81c9e18ce39df38e048c" }
 gramide_python = { git = "https://github.com/O6lvl4/gramide-python", ref = "v0.1.0", commit = "442d836a096499503a292b89bcfca3c2ee489a91" }
+gramide_javascript = { git = "file:///Users/o6lvl4/workspace/github.com/O6lvl4/gramide-javascript", ref = "main", commit = "a0a9f0d2b9cd4b82e095438202b356a7c956f051" }
+gramide_typescript = { git = "file:///Users/o6lvl4/workspace/github.com/O6lvl4/gramide-typescript", ref = "main", commit = "54bb8b7c076d945eeed551a79b2de9b050b34da2" }

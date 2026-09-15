@@ -23,8 +23,8 @@ fn lang_of(path: String) -> String =
   if string.ends_with(path, ".almd") then "almide"
   else if string.ends_with(path, ".rs") then "rust"
   else if string.ends_with(path, ".go") then "go"
-  else if string.ends_with(path, ".ts") or string.ends_with(path, ".tsx") then "typescript"
-  else if string.ends_with(path, ".js") or string.ends_with(path, ".jsx") or string.ends_with(path, ".mjs") then "javascript"
+  else if string.ends_with(path, ".ts") or string.ends_with(path, ".tsx") or string.ends_with(path, ".mts") or string.ends_with(path, ".cts") then "typescript"
+  else if string.ends_with(path, ".js") or string.ends_with(path, ".jsx") or string.ends_with(path, ".mjs") or string.ends_with(path, ".cjs") then "javascript"
   else if string.ends_with(path, ".py") then "python"
   else "text"
 

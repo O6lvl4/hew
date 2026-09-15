@@ -25,10 +25,11 @@ model has to find first, `grep -n` results say nothing about *where* a match is)
 does the narrowing properly, once, in one binary:
 
 - **Structure-aware.** `--symbol` cuts out a function, type, class, impl method or test by
-  name. Almide, Rust, Go and Python are parsed by [gramide](https://github.com/O6lvl4/gramide)'s
-  grammars, linked into the binary; a Python file halfway through an edit is read through
-  its recovered declarations. Declaration heuristics cover TypeScript/JavaScript.
-  `HEW_OUTLINE_BIN` plugs in an outline provider for any other language.
+  name. Almide, Rust, Go, Python, JavaScript and TypeScript are parsed by
+  [gramide](https://github.com/O6lvl4/gramide)'s grammars, linked into the binary; a Python,
+  JavaScript or TypeScript file halfway through an edit is read through its recovered
+  declarations. Declaration heuristics cover `.jsx` and `.tsx`. `HEW_OUTLINE_BIN` plugs in
+  an outline provider for any other language.
 - **Numbered and sized.** Every line carries its number so the next call can be
   `--lines A-B`. Long lines are clipped. Gaps are marked with how many lines were skipped.
   The header says how big the whole file is; the footer says how much was shown.
@@ -128,14 +129,14 @@ composes three modules:
 
 - **view** — takes the line windows to show and produces numbered lines, clipping, gap
   markers, header and footer.
-- **outline** — the table of contents. Almide, Rust, Go and Python are parsed by the
-  gramide grammars in **parsers** (strict first, then the recovered document where the
-  package offers one). Otherwise a per-language table of declaration rules finds
-  declaration lines and brace matching (indentation for Python) finds their ranges, behind
-  a stateful lexical mask that hides comments and literals, including Rust nested
-  comments/raw strings and Go/Python multiline literals. Those remain heuristics:
-  multiline headers, JavaScript regex literals and template interpolation are not a full
-  grammar. `find(name)` looks a symbol up by name, `enclosing(line)` by line.
+- **outline** — the table of contents. Almide, Rust, Go, Python, JavaScript and TypeScript
+  are parsed by the gramide grammars in **parsers** (strict first, then the recovered
+  document where the package offers one). Otherwise — `.jsx`, `.tsx`, or a provider that
+  broke its contract — a per-language table of declaration rules finds declaration lines
+  and brace matching (indentation for Python) finds their ranges, behind a stateful lexical
+  mask that hides comments and literals. Those remain heuristics: multiline headers, regex
+  literals and template interpolation are not a full grammar. `find(name)` looks a symbol
+  up by name, `enclosing(line)` by line.
 - **search** — walks directories (skipping vcs / build / deps / binaries), groups matches per
   file, folds identical lines, applies caps, and asks outline for the enclosing symbol.
 
@@ -147,9 +148,11 @@ Written in [Almide](https://github.com/almide/almide). Dual-licensed MIT / Apach
 ## Parser-backed reading
 
 hew links [gramide](https://github.com/O6lvl4/gramide) — the engine — and its
-four language packages ([Almide](https://github.com/O6lvl4/gramide-almide),
+six language packages ([Almide](https://github.com/O6lvl4/gramide-almide),
 [Go](https://github.com/O6lvl4/gramide-go), [Rust](https://github.com/O6lvl4/gramide-rust),
-[Python 3.14](https://github.com/O6lvl4/gramide-python)) as ordinary Almide
+[Python 3.14](https://github.com/O6lvl4/gramide-python),
+[JavaScript](https://github.com/O6lvl4/gramide-javascript),
+[TypeScript 5.9](https://github.com/O6lvl4/gramide-typescript)) as ordinary Almide
 dependencies, pinned in `almide.lock`: the same composition the `gramide`
 command ships, called in-process, so a directory outline costs a parse per
 file rather than a process per file, and nothing has to be on `PATH`.

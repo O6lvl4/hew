@@ -24,9 +24,10 @@ hew tree src --depth 2                             ディレクトリ。vcs / bu
 1 つのバイナリで、正しく、1 回で行います。
 
 - **構造を知っている。** `--symbol` で関数・型・クラス・impl のメソッド・テストを名前で切り出せます。
-  Almide・Rust・Go・Python はバイナリにリンクした [gramide](https://github.com/O6lvl4/gramide) の
-  文法でパースします。編集途中の Python は回復した宣言から読みます。TypeScript/JavaScript は
-  宣言ヒューリスティックです。他の言語は `HEW_OUTLINE_BIN` で目次プログラムを差し込めます。
+  Almide・Rust・Go・Python・JavaScript・TypeScript はバイナリにリンクした
+  [gramide](https://github.com/O6lvl4/gramide) の文法でパースします。編集途中の Python・JavaScript・
+  TypeScript は回復した宣言から読みます。`.jsx` と `.tsx` は宣言ヒューリスティックです。他の言語は
+  `HEW_OUTLINE_BIN` で目次プログラムを差し込めます。
 - **番号とサイズが付く。** 全行に行番号が付くので、次の呼び出しは `--lines A-B` で済みます。
   長い行は切り詰め、飛ばした箇所には飛ばした行数を示します。ヘッダにはファイル全体の大きさ、
   フッタには見せた量が出ます。
@@ -125,12 +126,12 @@ hew tree <dir> [--depth N]
 
 - **view** — 表示する行範囲（ウィンドウ）を受け取り、番号付きの行、切り詰め、省略マーカー、
   ヘッダとフッタを組み立てる。
-- **outline** — ファイルの目次。Almide・Rust・Go・Python は **parsers** にある gramide の文法で
-  パースする（まず厳密に、失敗したらパッケージが提供する回復文書で）。それ以外は言語ごとの
-  宣言ルール表で宣言行を見つけ、波括弧の対応（Python はインデント）で範囲を決める。状態を持つ
-  字句マスクがコメントとリテラル（Rust の入れ子コメントや raw 文字列、Go/Python の複数行リテラルを
-  含む）を先に隠す。それでもヒューリスティックはヒューリスティックで、複数行ヘッダや JavaScript の
-  正規表現リテラル、テンプレート補間までは完全な文法ではない。
+- **outline** — ファイルの目次。Almide・Rust・Go・Python・JavaScript・TypeScript は **parsers** に
+  ある gramide の文法でパースする（まず厳密に、失敗したらパッケージが提供する回復文書で）。
+  それ以外（`.jsx`・`.tsx`、契約を破ったプロバイダ）は言語ごとの宣言ルール表で宣言行を見つけ、
+  波括弧の対応（Python はインデント）で範囲を決める。状態を持つ字句マスクがコメントとリテラルを
+  先に隠す。それでもヒューリスティックはヒューリスティックで、複数行ヘッダや正規表現リテラル、
+  テンプレート補間までは完全な文法ではない。
   `find(name)` で名前から、`enclosing(line)` で行番号から、シンボルを引く。
 - **search** — ディレクトリを歩き（vcs / build / 依存 / バイナリは除外）、マッチをファイルごとに
   まとめ、同一行を畳み、上限をかけ、outline で囲んでいるシンボルを付ける。
@@ -142,9 +143,10 @@ hew tree <dir> [--depth N]
 
 ## パーサに裏打ちされた読み取り
 
-hew は [gramide](https://github.com/O6lvl4/gramide)（エンジン）と 4 つの言語パッケージ
+hew は [gramide](https://github.com/O6lvl4/gramide)（エンジン）と 6 つの言語パッケージ
 （[Almide](https://github.com/O6lvl4/gramide-almide)・[Go](https://github.com/O6lvl4/gramide-go)・
-[Rust](https://github.com/O6lvl4/gramide-rust)・[Python 3.14](https://github.com/O6lvl4/gramide-python)）
+[Rust](https://github.com/O6lvl4/gramide-rust)・[Python 3.14](https://github.com/O6lvl4/gramide-python)・
+[JavaScript](https://github.com/O6lvl4/gramide-javascript)・[TypeScript 5.9](https://github.com/O6lvl4/gramide-typescript)）
 を普通の Almide 依存としてリンクし、`almide.lock` で版を固定しています。`gramide` コマンドと同じ
 合成をプロセス内で呼ぶので、ディレクトリのアウトラインはファイルごとのプロセス起動ではなく
 ファイルごとのパース 1 回で済み、`PATH` に何も要りません。ディレクトリのアウトラインは、リンクした
