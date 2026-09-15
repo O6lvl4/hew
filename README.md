@@ -25,11 +25,11 @@ model has to find first, `grep -n` results say nothing about *where* a match is)
 does the narrowing properly, once, in one binary:
 
 - **Structure-aware.** `--symbol` cuts out a function, type, class, impl method or test by
-  name. Almide, Rust, Go, Python, JavaScript and TypeScript are parsed by
-  [gramide](https://github.com/O6lvl4/gramide)'s grammars, linked into the binary; a Python,
-  JavaScript or TypeScript file halfway through an edit is read through its recovered
-  declarations. Declaration heuristics cover `.jsx` and `.tsx`. `HEW_OUTLINE_BIN` plugs in
-  an outline provider for any other language.
+  name. Almide, Rust, Go, Python, JavaScript and TypeScript, JSX and `.tsx` included, are
+  parsed by [gramide](https://github.com/O6lvl4/gramide)'s grammars, linked into the binary;
+  a Python, JavaScript or TypeScript file halfway through an edit is read through its
+  recovered declarations. `HEW_OUTLINE_BIN` plugs in an outline provider for any other
+  language.
 - **Numbered and sized.** Every line carries its number so the next call can be
   `--lines A-B`. Long lines are clipped. Gaps are marked with how many lines were skipped.
   The header says how big the whole file is; the footer says how much was shown.
@@ -129,9 +129,9 @@ composes three modules:
 
 - **view** — takes the line windows to show and produces numbered lines, clipping, gap
   markers, header and footer.
-- **outline** — the table of contents. Almide, Rust, Go, Python, JavaScript and TypeScript
-  are parsed by the gramide grammars in **parsers** (strict first, then the recovered
-  document where the package offers one). Otherwise — `.jsx`, `.tsx`, or a provider that
+- **outline** — the table of contents. Almide, Rust, Go, Python, JavaScript (with JSX) and
+  TypeScript (with `.tsx`) are parsed by the gramide grammars in **parsers** (strict first,
+  then the recovered document where the package offers one). Otherwise — a provider that
   broke its contract — a per-language table of declaration rules finds declaration lines
   and brace matching (indentation for Python) finds their ranges, behind a stateful lexical
   mask that hides comments and literals. Those remain heuristics: multiline headers, regex
@@ -153,8 +153,15 @@ minimum of five runs ([evidence](docs/evidence/ast-grep-outline.json)):
 
 | | files | hew | ast-grep |
 |---|---:|---:|---:|
-| Node `lib/` (JavaScript) | 427 | 0.057 s | 0.053 s |
-| TypeScript 5.9 `src/` | 701 | 0.200 s | 0.157 s |
+| Node `lib/` (JavaScript) | 427 | 0.055 s | 0.053 s |
+| TypeScript 5.9 `src/` | 701 | 0.136 s | 0.169 s |
+
+The TypeScript number is bounded by one file: `checker.ts` is 3.1 MB and parses in
+about 0.10 s, and no arm can finish before the arm holding it. The files are dealt
+to the eight arms largest first, each to the arm with the least bytes so far, and
+the answers come out as one write; cutting the list into equal byte ranges instead
+put that file and 2.5 MB of neighbours in one slice, and printing 49,000 lines one
+at a time cost as much as the parsing.
 
 On a class whose third member's header is broken (`broken( {`), hew lists the two
 intact methods and the function after the class from the recovered parse, labelled

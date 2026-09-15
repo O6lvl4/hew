@@ -13,7 +13,7 @@ import gramide_typescript
 
 fn packages() -> List[package_api.Definition] =
   [gramide_almide.definition(), gramide_go.definition(), gramide_rust.definition(), gramide_python.definition(),
-   gramide_javascript.definition(), gramide_typescript.definition()]
+   gramide_javascript.definition(), gramide_typescript.definition(), gramide_typescript.tsx()]
 
 // The extensions some linked package answers `capability` for: what a
 // directory outline reads beyond the languages hew knows on its own.
@@ -27,6 +27,6 @@ fn versions() -> List[String] =
 test "the linked packages answer symbols for their extensions" {
   let exts = extensions_with("symbols")
   assert(list.contains(exts, ".py") and list.contains(exts, ".pyi") and list.contains(exts, ".rs") and list.contains(exts, ".go") and list.contains(exts, ".almd"))
-  assert(list.contains(exts, ".js") and list.contains(exts, ".mjs") and list.contains(exts, ".ts") and list.contains(exts, ".cts"))
-  assert_eq(list.len(versions()), 7)
+  assert(list.contains(exts, ".js") and list.contains(exts, ".jsx") and list.contains(exts, ".ts") and list.contains(exts, ".cts") and list.contains(exts, ".tsx"))
+  assert_eq(list.len(versions()), 8)
 }

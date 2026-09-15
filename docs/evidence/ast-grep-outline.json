@@ -3,20 +3,20 @@
   "cpus": 14,
   "samples": 5,
   "ast_grep_version": "ast-grep 0.45.3",
-  "hew_version": "hew 0.3.0",
+  "hew_version": "hew 0.4.0",
   "directories": [
     {
       "dir": "/Users/o6lvl4/workspace/github.com/O6lvl4/almide-references/node/lib",
       "files": 427,
       "bytes": 5717799,
       "hew": {
-        "min_seconds": 0.0566,
-        "median_seconds": 0.0567,
+        "min_seconds": 0.0552,
+        "median_seconds": 0.0556,
         "output_lines": 11872
       },
       "ast_grep": {
-        "min_seconds": 0.0534,
-        "median_seconds": 0.0579,
+        "min_seconds": 0.0526,
+        "median_seconds": 0.0573,
         "output_lines": 400
       }
     },
@@ -25,13 +25,13 @@
       "files": 701,
       "bytes": 20577682,
       "hew": {
-        "min_seconds": 0.1996,
-        "median_seconds": 0.2002,
+        "min_seconds": 0.136,
+        "median_seconds": 0.1365,
         "output_lines": 49193
       },
       "ast_grep": {
-        "min_seconds": 0.1573,
-        "median_seconds": 0.167,
+        "min_seconds": 0.1686,
+        "median_seconds": 0.1804,
         "output_lines": 580
       }
     }

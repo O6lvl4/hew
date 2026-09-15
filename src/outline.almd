@@ -14,6 +14,7 @@ import env
 import self.code_mask
 import self.parsers
 import gramide.symbols as structured
+import gramide.lang as linked
 
 type Sym = { kind: String, name: String, start: Int, end: Int }
 type Outline = { lang: String, total_lines: Int, symbols: List[Sym], engine: String }
@@ -23,7 +24,8 @@ fn lang_of(path: String) -> String =
   if string.ends_with(path, ".almd") then "almide"
   else if string.ends_with(path, ".rs") then "rust"
   else if string.ends_with(path, ".go") then "go"
-  else if string.ends_with(path, ".ts") or string.ends_with(path, ".tsx") or string.ends_with(path, ".mts") or string.ends_with(path, ".cts") then "typescript"
+  else if string.ends_with(path, ".tsx") then "tsx"
+  else if string.ends_with(path, ".ts") or string.ends_with(path, ".mts") or string.ends_with(path, ".cts") then "typescript"
   else if string.ends_with(path, ".js") or string.ends_with(path, ".jsx") or string.ends_with(path, ".mjs") or string.ends_with(path, ".cjs") then "javascript"
   else if string.ends_with(path, ".py") then "python"
   else "text"
@@ -88,7 +90,7 @@ fn rules_for(lang: String) -> List[(String, String, Int)] = {
     ("func", "^func (\\([^)]*\\) )?(" + id + ")", 2),
     ("type", "^type (" + id + ")", 1),
   ]
-  else if lang == "typescript" or lang == "javascript" then [
+  else if lang == "typescript" or lang == "tsx" or lang == "javascript" then [
     ("function", "^(export )?(default )?(async )?function\\*? (" + id + ")", 4),
     ("class", "^(export )?(default )?(abstract )?class (" + id + ")", 4),
     ("interface", "^(export )?interface (" + id + ")", 2),
@@ -282,36 +284,43 @@ fn recovered_result(raw: String, lang: String, total: Int) -> Result[Outline, St
 // The strict document, then the recovered one where the package offers it —
 // both in this process: the grammars are linked, not found on PATH, so a
 // directory outline costs a parse per file rather than a process per file.
-fn gramide_read(path: String, text: String, lang: String, total: Int) -> Result[Outline, String] =
-  match structured.document(parsers.packages(), path, text) {
+// A directory outline compiles each grammar once, for the files it will
+// read, and reads them all through that: `engines_for` before the loop,
+// `of_file_in` inside it. Reading 700 files through `of_file` instead decodes
+// the TypeScript table 700 times, and that was most of the wall time.
+fn engines_for(files: List[String]) -> linked.Engines = linked.engines_for(parsers.packages(), files)
+
+fn gramide_read(e: linked.Engines, path: String, text: String, lang: String, total: Int) -> Result[Outline, String] =
+  match structured.document_with(e, path, text) {
     ok(raw) => gramide_result(raw, lang, total),
     err(_) => {
-      let raw = structured.recovered_document(parsers.packages(), path, text)!
+      let raw = structured.recovered_document_with(e, path, text)!
       recovered_result(raw, lang, total)
     },
   }
 
-fn via_gramide(path: String, text: String, lang: String, total: Int) -> Option[Outline] =
-  match gramide_read(path, text, lang, total) { ok(o) => some(o), err(_) => none }
+fn via_gramide(e: linked.Engines, path: String, text: String, lang: String, total: Int) -> Option[Outline] =
+  match gramide_read(e, path, text, lang, total) { ok(o) => some(o), err(_) => none }
 
-fn linked_or_heuristic(path: String, text: String, lang: String, lines: List[String], total: Int) -> Outline =
-  match via_gramide(path, text, lang, total) {
+fn linked_or_heuristic(e: linked.Engines, path: String, text: String, lang: String, lines: List[String], total: Int) -> Outline =
+  match via_gramide(e, path, text, lang, total) {
     some(o) => o,
     none => of_lines(lang, lines),
   }
 
-effect fn of_file_with(path: String, text: String, lines: List[String], provider: Option[String]) -> Outline = {
+effect fn of_file_with(e: linked.Engines, path: String, text: String, lines: List[String], provider: Option[String]) -> Outline = {
   let lang = lang_of(path)
   let total = list.len(lines)
   // an explicit provider wins when it keeps the contract; one that does not is
   // ignored, and the linked grammar answers before any heuristic does
   match via_helper(provider, path) ?? none {
-    some(o) => if valid_outline(o, lang, total) then o else linked_or_heuristic(path, text, lang, lines, total),
-    none => linked_or_heuristic(path, text, lang, lines, total),
+    some(o) => if valid_outline(o, lang, total) then o else linked_or_heuristic(e, path, text, lang, lines, total),
+    none => linked_or_heuristic(e, path, text, lang, lines, total),
   }
 }
 
-effect fn of_file(path: String, text: String, lines: List[String]) -> Outline = of_file_with(path, text, lines, env.get("HEW_OUTLINE_BIN"))
+effect fn of_file_in(e: linked.Engines, path: String, text: String, lines: List[String]) -> Outline = of_file_with(e, path, text, lines, env.get("HEW_OUTLINE_BIN"))
+effect fn of_file(path: String, text: String, lines: List[String]) -> Outline = of_file_in(engines_for([path]), path, text, lines)
 
 // Exact name first, then a suffix match so `compile` finds `Compiler::compile`.
 fn find(o: Outline, name: String) -> Option[Sym] =

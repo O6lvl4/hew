@@ -92,10 +92,18 @@ with tempfile.TemporaryDirectory() as tmp:
   assert '; gramide)' in outline and 'Shape.area' in outline and 'Box.constructor' in outline and 'function  make' in outline and 'namespace ns' in outline and 'type      ns.Id' in outline,outline
   body=subprocess.check_output([str(hew),str(p),'--symbol','Box.size'],env=env,text=True)
   assert '** 2' in body and 'constructor' not in body and '(gramide)' in body,body
+ p=Path(tmp)/'view.tsx'
+ p.write_text('export function View<T>({ items }: { items: T[] }) {\n  return <ul>{items.map((i) => <li key={String(i)}>{i}</li>)}</ul>\n}\nexport const pick = <T,>(a: T) => <Select<T> value={a} />\n')
+ outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+ assert '; gramide)' in outline and 'function  View' in outline and 'function  pick' in outline,outline
+ p=Path(tmp)/'view.jsx'
+ p.write_text('export function View({ items }) {\n  return <ul>{items.map((i) => <li key={i}>{i}</li>)}</ul>\n}\n')
+ outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
+ assert '; gramide)' in outline and 'function  View' in outline,outline
  p=Path(tmp)/'editing.ts'
  p.write_text('export class Box {\n  read(): number { return 1 }\n  broken(: {\n  also(x: string) { return x }\n}\nexport function f(): void {}\n')
  outline=subprocess.check_output([str(hew),'outline',str(p)],env=env,text=True)
  assert '; gramide-recovered)' in outline and 'Box.read' in outline and 'Box.also' in outline and 'function  f' in outline and 'broken' not in outline,outline
  body=subprocess.check_output([str(hew),str(p),'--symbol','Box.also'],env=env,text=True)
  assert 'return x' in body and 'broken' not in body and 'gramide-recovered' in body,body
-print('Linked grammars passed: Rust envelopes, Python nesting and stubs, JavaScript and TypeScript declarations, recovered declarations around every kind of damage')
+print('Linked grammars passed: Rust envelopes, Python nesting and stubs, JavaScript, JSX, TypeScript and TSX declarations, recovered declarations around every kind of damage')

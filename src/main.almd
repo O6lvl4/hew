@@ -18,7 +18,7 @@ import self.outline
 import self.search
 import self.parsers
 
-let VERSION = "0.3.0"
+let VERSION = "0.4.0"
 
 fn usage() -> String = """hew ${VERSION} — read code the way a model should
 
@@ -123,79 +123,83 @@ effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
 }
 
 // ── hew outline ──────────────────────────────────────────────────────────
-// A directory is outlined in eight byte-balanced slices, each a `fan` arm
-// that parses its files in-process and answers its rendered lines; the
-// answers are printed in order. An arm takes the file list and two numbers,
-// because an arm cannot carry a closure.
-effect fn cut_points(paths: List[String], of: Int) -> List[Int] = {
-  var sizes: List[Int] = []
-  var total = 0
-  for p in paths {
-    let s = fs.file_size(p) ?? 0
-    list.push(sizes, s)
-    total = total + s
-  }
-  var cuts: List[Int] = [0]
-  var acc = 0
-  var target = 1
+// A directory is outlined by eight `fan` arms, each parsing its files
+// in-process and answering its rendered lines, printed back in list order.
+// The files are dealt to the arms largest first, each to the arm with the
+// least bytes so far: the wall time is the slowest arm, and cutting the list
+// into equal byte ranges put a 3.1 MB file and its 2.5 MB of neighbours in one
+// slice. An arm takes the file list and its indices, because an arm cannot
+// carry a closure.
+effect fn dealt(paths: List[String], of: Int) -> List[List[Int]] = {
+  var order: List[(Int, Int)] = []
   var i = 0
-  while i < list.len(sizes) {
-    acc = acc + (list.get(sizes, i) ?? 0)
-    if target < of and acc * of >= total * target then {
-      list.push(cuts, i + 1)
-      target = target + 1
-    } else ()
-    i = i + 1
+  for p in paths { list.push(order, (fs.file_size(p) ?? 0, i)); i = i + 1 }
+  let by_size = list.sort_by(order, (a) => 0 - a.0)
+  var arms: List[List[Int]] = []
+  var loads: List[Int] = []
+  var a = 0
+  while a < of { list.push(arms, ([]: List[Int])); list.push(loads, 0); a = a + 1 }
+  for (size, index) in by_size {
+    var lightest = 0
+    var k = 1
+    while k < of { if (list.get(loads, k) ?? 0) < (list.get(loads, lightest) ?? 0) then lightest = k else (); k = k + 1 }
+    var arm = list.get(arms, lightest) ?? ([]: List[Int])
+    list.push(arm, index)
+    arms = list.set(arms, lightest, arm)
+    loads = list.set(loads, lightest, (list.get(loads, lightest) ?? 0) + size)
   }
-  while list.len(cuts) <= of { list.push(cuts, list.len(paths)) }
-  cuts
+  arms
 }
 
-effect fn outline_chunk(files: List[String], from: Int, to: Int, max: Int, many: Bool) -> List[String] = {
-  var out: List[String] = []
-  var i = from
-  while i < to {
+effect fn outline_chunk(files: List[String], mine: List[Int], max: Int, many: Bool) -> List[(Int, List[String])] = {
+  var out: List[(Int, List[String])] = []
+  let engines = outline.engines_for(list.map(mine, (i) => list.get(files, i) ?? ""))
+  for i in mine {
     let f = list.get(files, i) ?? ""
+    var rows: List[String] = []
     match fs.read_text(f) {
-      err(_) => list.push(out, "# ${f}: unreadable"),
+      err(_) => list.push(rows, "# ${f}: unreadable"),
       ok(text) => {
         let lines = string.lines(text)
-        match outline.of_file(f, text, lines) {
-          err(e) => list.push(out, "# ${f}: ${e}"),
+        match outline.of_file_in(engines, f, text, lines) {
+          err(e) => list.push(rows, "# ${f}: ${e}"),
           ok(o) => if list.is_empty(o.symbols) and many then () else {
-            list.push(out, "# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols; ${o.engine})")
-            for l in outline.render_rows(o, max) { list.push(out, l) }
+            list.push(rows, "# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols; ${o.engine})")
+            for l in outline.render_rows(o, max) { list.push(rows, l) }
           },
         }
       },
     }
-    i = i + 1
+    list.push(out, (i, rows))
   }
   out
 }
 
 effect fn parallel_outline(files: List[String], max: Int) -> List[List[String]] = {
-  let cuts = cut_points(files, 8)!
-  let c0 = list.get(cuts, 0) ?? 0
-  let c1 = list.get(cuts, 1) ?? 0
-  let c2 = list.get(cuts, 2) ?? 0
-  let c3 = list.get(cuts, 3) ?? 0
-  let c4 = list.get(cuts, 4) ?? 0
-  let c5 = list.get(cuts, 5) ?? 0
-  let c6 = list.get(cuts, 6) ?? 0
-  let c7 = list.get(cuts, 7) ?? 0
-  let c8 = list.len(files)
+  let plan = dealt(files, 8)!
+  let a0 = list.get(plan, 0) ?? []
+  let a1 = list.get(plan, 1) ?? []
+  let a2 = list.get(plan, 2) ?? []
+  let a3 = list.get(plan, 3) ?? []
+  let a4 = list.get(plan, 4) ?? []
+  let a5 = list.get(plan, 5) ?? []
+  let a6 = list.get(plan, 6) ?? []
+  let a7 = list.get(plan, 7) ?? []
   let r = fan {
-    outline_chunk(files, c0, c1, max, true),
-    outline_chunk(files, c1, c2, max, true),
-    outline_chunk(files, c2, c3, max, true),
-    outline_chunk(files, c3, c4, max, true),
-    outline_chunk(files, c4, c5, max, true),
-    outline_chunk(files, c5, c6, max, true),
-    outline_chunk(files, c6, c7, max, true),
-    outline_chunk(files, c7, c8, max, true)
+    outline_chunk(files, a0, max, true),
+    outline_chunk(files, a1, max, true),
+    outline_chunk(files, a2, max, true),
+    outline_chunk(files, a3, max, true),
+    outline_chunk(files, a4, max, true),
+    outline_chunk(files, a5, max, true),
+    outline_chunk(files, a6, max, true),
+    outline_chunk(files, a7, max, true)
   }
-  [r.0, r.1, r.2, r.3, r.4, r.5, r.6, r.7]
+  // back in list order by one sort, not by placing each answer: `list.set`
+  // copies the list it returns, and 700 copies of 49,000 lines is longer
+  // than the parsing
+  let answered = list.sort_by(r.0 + r.1 + r.2 + r.3 + r.4 + r.5 + r.6 + r.7, (x) => x.0)
+  list.map(answered, (x) => x.1)
 }
 
 effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
@@ -212,7 +216,7 @@ effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
     println("# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols; ${o.engine})")
     for l in outline.render_rows(o, max) { println(l) }
   } else {
-    for chunk in parallel_outline(files, max)! { for l in chunk { println(l) } }
+    println(list.join(list.flat_map(parallel_outline(files, max)!, (chunk) => chunk), "\n"))
   }
   ok(())
 }
