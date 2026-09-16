@@ -1,13 +1,13 @@
 [package]
 name = "hew"
-version = "0.4.9"
+version = "0.4.10"
 edition = "2026"
 
 [dependencies]
-gramide = { git = "https://github.com/O6lvl4/gramide", tag = "v0.2.3" }
-gramide_almide = { git = "https://github.com/O6lvl4/gramide-almide", tag = "v0.1.6" }
-gramide_go = { git = "https://github.com/O6lvl4/gramide-go", tag = "v0.1.6" }
-gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", tag = "v0.1.7" }
-gramide_python = { git = "https://github.com/O6lvl4/gramide-python", tag = "v0.1.4" }
-gramide_javascript = { git = "https://github.com/O6lvl4/gramide-javascript", tag = "v0.3.4" }
-gramide_typescript = { git = "https://github.com/O6lvl4/gramide-typescript", tag = "v0.3.4" }
+gramide = { git = "https://github.com/O6lvl4/gramide", tag = "v0.2.4" }
+gramide_almide = { git = "https://github.com/O6lvl4/gramide-almide", tag = "v0.1.7" }
+gramide_go = { git = "https://github.com/O6lvl4/gramide-go", tag = "v0.1.7" }
+gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", tag = "v0.1.8" }
+gramide_python = { git = "https://github.com/O6lvl4/gramide-python", tag = "v0.1.5" }
+gramide_javascript = { git = "https://github.com/O6lvl4/gramide-javascript", tag = "v0.3.5" }
+gramide_typescript = { git = "https://github.com/O6lvl4/gramide-typescript", tag = "v0.3.5" }
