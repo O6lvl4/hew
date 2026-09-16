@@ -3,7 +3,7 @@
 gramide = { git = "https://github.com/O6lvl4/gramide", ref = "v0.2.1", commit = "b22b9860dae741c7df914a25da84f8ad3e5e9020" }
 gramide_almide = { git = "https://github.com/O6lvl4/gramide-almide", ref = "v0.1.4", commit = "60682aaa54e3b1cb6b86c667fd2129a39848f188" }
 gramide_go = { git = "https://github.com/O6lvl4/gramide-go", ref = "v0.1.4", commit = "d79ad52c66f05c5125b807c6c8e5ae19b7ca9a47" }
-gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", ref = "v0.1.4", commit = "d13754da9c23a8d675ab4d67de2d74d75884b1a4" }
+gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", ref = "v0.1.5", commit = "03f8968a8366c1e8bf5e26c6646516ad0af3bfa7" }
 gramide_python = { git = "https://github.com/O6lvl4/gramide-python", ref = "v0.1.2", commit = "f7c89706fe29572e0db83263b6ffc0a79c798a94" }
 gramide_javascript = { git = "https://github.com/O6lvl4/gramide-javascript", ref = "v0.3.2", commit = "36b3c6564f20cc10f753bc15172b5a5ec1086fb9" }
 gramide_typescript = { git = "https://github.com/O6lvl4/gramide-typescript", ref = "v0.3.2", commit = "68bb5c5e6433fed7fa78a54d7e7175c75c3415c5" }
