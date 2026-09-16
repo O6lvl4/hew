@@ -70,7 +70,8 @@ effect fn readable(path: String) -> Option[String] = {
 }
 
 effect fn search_file(engines: linked.Engines, path: String, pat: String, per_file: Int) -> Option[FileHits] = {
-  let text = readable(path)!
+  let text = readable(path)! ?? ""
+  guard text != "" else none
   guard not literal(pat) or string.contains(text, pat) else none
   let lines = string.lines(text)
   let matched = list.enumerate(lines) |> list.filter((p) => regex.is_match(pat, p.1))
