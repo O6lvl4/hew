@@ -18,7 +18,7 @@ import self.outline
 import self.search
 import self.parsers
 
-let VERSION = "0.4.5"
+let VERSION = "0.4.6"
 
 fn usage() -> String = """hew ${VERSION} — read code the way a model should
 
