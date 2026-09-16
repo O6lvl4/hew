@@ -6,6 +6,7 @@
 import fs
 import regex
 import self.outline
+import gramide.lang as linked
 import self.view
 
 let SKIP_DIRS = [".git", ".hg", ".svn", "target", "node_modules", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".claude", "vendor", ".cache"]
@@ -53,16 +54,29 @@ fn fold_hits(hits: List[Hit], per_file: Int) -> List[Hit] = {
   list.take(annotated, per_file)
 }
 
-effect fn search_file(path: String, pat: String, per_file: Int) -> Option[FileHits] = {
-  let size = fs.file_size(path) ?? 0
-  guard size <= MAX_FILE_BYTES else none
+// A pattern with no regex metacharacter is a literal, and a literal matches
+// some line of a file exactly when the text contains it: one `contains` over
+// the text says whether the lines are worth splitting. A real regex gets no
+// prefilter: `regex.is_match` over a 3 MB text with no match takes seconds,
+// longer than the per-line calls it would save.
+let META = "\\^$.|?*+()[]{}"
+fn literal(pat: String) -> Bool = list.all(string.chars(pat), (c) => not string.contains(META, c))
+
+// The text of a file worth searching: not too big, readable, not binary
+effect fn readable(path: String) -> Option[String] = {
+  guard (fs.file_size(path) ?? 0) <= MAX_FILE_BYTES else none
   let text = match fs.read_text(path) { ok(t) => t, err(_) => "" }
-  guard text != "" and not looks_binary(text) else none
+  if text != "" and not looks_binary(text) then some(text) else none
+}
+
+effect fn search_file(engines: linked.Engines, path: String, pat: String, per_file: Int) -> Option[FileHits] = {
+  let text = readable(path)!
+  guard not literal(pat) or string.contains(text, pat) else none
   let lines = string.lines(text)
   let matched = list.enumerate(lines) |> list.filter((p) => regex.is_match(pat, p.1))
   guard not list.is_empty(matched) else none
   // parser-backed where a grammar is linked: a grep label names the real enclosing symbol
-  let o = outline.of_file(path, text, lines)!
+  let o = outline.of_file_in(engines, path, text, lines)!
   let hits = list.map(matched, (p) => Hit {
     line: p.0 + 1, text: p.1,
     sym: match outline.enclosing(o, p.0 + 1) { some(s) => s.name, none => "" },
@@ -70,15 +84,42 @@ effect fn search_file(path: String, pat: String, per_file: Int) -> Option[FileHi
   some(FileHits { path: path, hits: fold_hits(hits, per_file), total: list.len(matched) })
 }
 
-effect fn run(pat: String, paths: List[String], per_file: Int, max_files: Int) -> List[FileHits] = {
-  var out: List[FileHits] = []
-  for f in collect(paths)! {
-    if list.len(out) >= max_files then () else match search_file(f, pat, per_file) ?? none {
-      some(fh) => list.push(out, fh),
+// One arm of the search: every `of`-th file from `from`, answered with its
+// index so the arms' answers can be put back in list order. The grammars the
+// arm's files need are compiled once for the arm.
+effect fn search_chunk(files: List[String], from: Int, of: Int, pat: String, per_file: Int) -> List[(Int, FileHits)] = {
+  var out: List[(Int, FileHits)] = []
+  var mine: List[String] = []
+  var i = from
+  while i < list.len(files) { list.push(mine, list.get(files, i) ?? ""); i = i + of }
+  let engines = outline.engines_for(mine)
+  i = from
+  while i < list.len(files) {
+    match search_file(engines, list.get(files, i) ?? "", pat, per_file) ?? none {
+      some(fh) => list.push(out, (i, fh)),
       none => (),
     }
+    i = i + of
   }
   out
+}
+
+effect fn run(pat: String, paths: List[String], per_file: Int, max_files: Int) -> List[FileHits] = {
+  // not `files` or `found`: the fan capture check is by name across every
+  // linked module, and gramide has `var`s of both names (almide #2242)
+  let grep_files = collect(paths)!
+  let r = fan {
+    search_chunk(grep_files, 0, 8, pat, per_file),
+    search_chunk(grep_files, 1, 8, pat, per_file),
+    search_chunk(grep_files, 2, 8, pat, per_file),
+    search_chunk(grep_files, 3, 8, pat, per_file),
+    search_chunk(grep_files, 4, 8, pat, per_file),
+    search_chunk(grep_files, 5, 8, pat, per_file),
+    search_chunk(grep_files, 6, 8, pat, per_file),
+    search_chunk(grep_files, 7, 8, pat, per_file)
+  }
+  let answered = list.sort_by(r.0 + r.1 + r.2 + r.3 + r.4 + r.5 + r.6 + r.7, (x) => x.0)
+  list.take(list.map(answered, (x) => x.1), max_files)
 }
 
 fn render(results: List[FileHits], clip_at: Int) -> List[String] = {
