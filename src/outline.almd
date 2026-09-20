@@ -319,8 +319,8 @@ effect fn of_file_with(e: linked.Engines, path: String, text: String, lines: Lis
   }
 }
 
-effect fn of_file_in(e: linked.Engines, path: String, text: String, lines: List[String]) -> Outline = of_file_with(e, path, text, lines, env.get("HEW_OUTLINE_BIN"))
-effect fn of_file(path: String, text: String, lines: List[String]) -> Outline = of_file_in(engines_for([path]), path, text, lines)
+effect fn of_file_in(e: linked.Engines, path: String, text: String, lines: List[String]) -> Outline = of_file_with(e, path, text, lines, env.get("HEW_OUTLINE_BIN"))!
+effect fn of_file(path: String, text: String, lines: List[String]) -> Outline = of_file_in(engines_for([path]), path, text, lines)!
 
 // Exact name first, then a suffix match so `compile` finds `Compiler::compile`.
 fn find(o: Outline, name: String) -> Option[Sym] =
