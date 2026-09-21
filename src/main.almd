@@ -160,8 +160,7 @@ effect fn outline_chunk(files: List[String], mine: List[Int], max: Int, many: Bo
     match fs.read_text(f) {
       err(_) => list.push(rows, "# ${f}: unreadable"),
       ok(text) => {
-        let lines = string.lines(text)
-        match outline.of_file_in(engines, f, text, lines) {
+        match outline.of_text_in(engines, f, text) {
           err(e) => list.push(rows, "# ${f}: ${e}"),
           ok(o) => if list.is_empty(o.symbols) and many then () else {
             list.push(rows, "# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols; ${o.engine})")
@@ -211,8 +210,7 @@ effect fn cmd_outline(args: List[String]) -> Result[Unit, String] = {
   if list.len(files) == 1 then {
     let f = list.get(files, 0) ?? target
     let text = fs.read_text(f)!
-    let lines = string.lines(text)
-    let o = outline.of_file(f, text, lines)!
+    let o = outline.of_text(f, text)!
     println("# ${f}  (${int.to_string(o.total_lines)} lines, ${int.to_string(list.len(o.symbols))} symbols; ${o.engine})")
     for l in outline.render_rows(o, max) { println(l) }
   } else {

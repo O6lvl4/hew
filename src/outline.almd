@@ -302,23 +302,40 @@ fn gramide_read(e: linked.Engines, path: String, text: String, lang: String, tot
 fn via_gramide(e: linked.Engines, path: String, text: String, lang: String, total: Int) -> Option[Outline] =
   match gramide_read(e, path, text, lang, total) { ok(o) => some(o), err(_) => none }
 
-fn linked_or_heuristic(e: linked.Engines, path: String, text: String, lang: String, lines: List[String], total: Int) -> Outline =
+// An outline wants the line count, not the lines. Splitting a file into a
+// List[String] to call `list.len` on it allocates one String per line: over the
+// TypeScript 5.9 corpus that is 443,370 strings and 13 ms that no one reads.
+// The count is a byte scan, and the lines are split only in the one branch that
+// reads them — the heuristic, which runs when no grammar answered.
+fn line_count(text: String) -> Int =
+  if string.len(text) == 0 then 0
+  else string.count(text, "\n") + (if string.ends_with(text, "\n") then 0 else 1)
+
+fn linked_or_heuristic(e: linked.Engines, path: String, text: String, lang: String, total: Int) -> Outline =
   match via_gramide(e, path, text, lang, total) {
     some(o) => o,
-    none => of_lines(lang, lines),
+    none => of_lines(lang, string.lines(text)),
   }
 
-effect fn of_file_with(e: linked.Engines, path: String, text: String, lines: List[String], provider: Option[String]) -> Outline = {
+effect fn of_total(e: linked.Engines, path: String, text: String, total: Int, provider: Option[String]) -> Outline = {
   let lang = lang_of(path)
-  let total = list.len(lines)
   // an explicit provider wins when it keeps the contract; one that does not is
   // ignored, and the linked grammar answers before any heuristic does
   match via_helper(provider, path) ?? none {
-    some(o) => if valid_outline(o, lang, total) then o else linked_or_heuristic(e, path, text, lang, lines, total),
-    none => linked_or_heuristic(e, path, text, lang, lines, total),
+    some(o) => if valid_outline(o, lang, total) then o else linked_or_heuristic(e, path, text, lang, total),
+    none => linked_or_heuristic(e, path, text, lang, total),
   }
 }
 
+// Two doors into the same room, so that neither caller pays for the other's
+// shape: `of_text_*` counts the newlines, `of_file_*` is for a caller that
+// already holds the split lines (the file view does; ctxgate does) and takes
+// the count from them.
+effect fn of_text_with(e: linked.Engines, path: String, text: String, provider: Option[String]) -> Outline = of_total(e, path, text, line_count(text), provider)!
+effect fn of_text_in(e: linked.Engines, path: String, text: String) -> Outline = of_text_with(e, path, text, env.get("HEW_OUTLINE_BIN"))!
+effect fn of_text(path: String, text: String) -> Outline = of_text_in(engines_for([path]), path, text)!
+
+effect fn of_file_with(e: linked.Engines, path: String, text: String, lines: List[String], provider: Option[String]) -> Outline = of_total(e, path, text, list.len(lines), provider)!
 effect fn of_file_in(e: linked.Engines, path: String, text: String, lines: List[String]) -> Outline = of_file_with(e, path, text, lines, env.get("HEW_OUTLINE_BIN"))!
 effect fn of_file(path: String, text: String, lines: List[String]) -> Outline = of_file_in(engines_for([path]), path, text, lines)!
 

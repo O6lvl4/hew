@@ -10,7 +10,7 @@ reported, with the median beside it. hew is run with HEW_OUTLINE_BIN unset
 so the linked grammars answer. Nothing here is an incremental-parse or
 editor-latency measurement; it is the cost an agent pays for one call."""
 from pathlib import Path
-import json, os, platform, statistics, subprocess, sys, tempfile, time
+import hashlib, json, os, platform, statistics, subprocess, sys, tempfile, time
 
 args = sys.argv[1:]
 out = Path(args[args.index("--out") + 1]) if "--out" in args else None
@@ -29,9 +29,17 @@ def measure(cmd):
     timed(cmd)
     return [timed(cmd)[0] for _ in range(samples)]
 
+# A version string is not an identification: it changes one commit before a
+# release and the builds before it wear the old number (almide/almide#2384).
+# `hew --version` names the engine and every grammar under its first line, and
+# that is most of what these numbers measure, so the whole block is kept — with
+# the hash of the binary that produced them, which cannot be misspelled.
+version = subprocess.check_output([str(hew), "--version"], text=True, env=env).splitlines()
 results = {"platform": platform.platform(), "cpus": os.cpu_count(), "samples": samples,
            "ast_grep_version": subprocess.check_output([sg, "--version"], text=True).strip(),
-           "hew_version": subprocess.check_output([str(hew), "--version"], text=True, env=env).splitlines()[0],
+           "hew_version": version[0].strip(),
+           "hew_pins": [l.strip() for l in version[1:] if l.strip()],
+           "hew_sha256": hashlib.sha256(hew.read_bytes()).hexdigest(),
            "directories": [], "broken_file": {}}
 for d in dirs:
     files = [p for p in Path(d).rglob("*") if p.suffix in (".js", ".mjs", ".cjs", ".ts", ".mts", ".cts")]
