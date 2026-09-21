@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.jpg" alt="hew — コードを、モデルが読むべき形で読む" width="760">
+</p>
+
 # hew
 
 コードを、モデルが読むべき形で読むためのコマンドです。コーディングエージェントが 1 セッションに

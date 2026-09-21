@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.jpg" alt="hew — read code the way a model should" width="760">
+</p>
+
 # hew
 
 Read code the way a model should. `hew` is a replacement for the `cat` / `grep` / `sed -n` /
