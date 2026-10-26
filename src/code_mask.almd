@@ -2,7 +2,7 @@
 // This is lexical support for declaration heuristics, not a language parser.
 import bytes
 
-fn byte_at(source: Bytes, i: Int) -> Int = bytes.get_or(source, i, -1)
+fn byte_at(source: Bytes, i: Int) -> Int = bytes.get(source, i) ?? -1
 
 fn quoted_end(source: Bytes, start: Int, quote: Int, width: Int, escaped: Bool) -> Int = {
   var i = start + width
@@ -91,7 +91,7 @@ fn hidden_end(lang: String, source: Bytes, i: Int) -> Int = {
 
 fn lines(lang: String, input: List[String]) -> List[String] = {
   let source = bytes.from_string(list.join(input, "\n"))
-  var out = bytes.new(0)
+  var out = bytes.zeros(0)
   var hidden = 0
   var i = 0
   while i < bytes.len(source) {

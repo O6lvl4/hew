@@ -31,7 +31,7 @@ fn lang_of(path: String) -> String =
   else "text"
 
 // ── .almd ─────────────────────────────────────────────────────────────────
-fn almd_name(rest: String) -> String = regex.find("^[A-Za-z_][A-Za-z0-9_.]*", rest) ?? ""
+fn almd_name(rest: String) -> String = regex.find(regex.new("^[A-Za-z_][A-Za-z0-9_.]*"), rest) ?? ""
 
 fn almd_decl(line: String) -> Option[(String, String)] =
   if string.starts_with(line, "effect fn ") then some(("effect fn", almd_name(string.drop(line, 10))))
@@ -111,7 +111,7 @@ fn decl_of(lang: String, line: String) -> Option[(String, String)] = {
   let t = string.trim(line)
   list.fold(rules_for(lang), none, (acc, r) => match acc {
     some(x) => some(x),
-    none => match regex.captures(r.1, t) {
+    none => match regex.captures(regex.new(r.1), t) {
       some(cs) => match list.get(cs, r.2) { some(n) => if n == "" then none else some((r.0, n)), none => none },
       none => none,
     },
@@ -133,7 +133,7 @@ fn brace_end(lines: List[String], start: Int) -> Int = {
     let code = l
     if not seen_open and string.contains(code, ";") and not string.contains(code, "{") then found = i
     else {
-      for ch in string.chars(code) {
+      for ch in string.to_list(code) {
         if ch == "{" then { depth = depth + 1; seen_open = true }
         else if ch == "}" then depth = depth - 1
         else ()
@@ -190,15 +190,15 @@ fn qualify(lang: String, syms: List[Sym]) -> List[Sym] = {
 // ── helper (tree-sitter) ─────────────────────────────────────────────────
 fn from_json(text: String) -> Result[Outline, String] = {
   let j = json.parse(text)!
-  let lang = json.get_string(j, "lang") |> option.to_result("missing language")!
-  let total = json.get_int(j, "total_lines") |> option.to_result("missing line count")!
-  let rows = json.get_array(j, "symbols") |> option.to_result("missing symbols")!
+  let lang = value.get_string(j, "lang") |> option.to_result("missing language")!
+  let total = value.get_int(j, "total_lines") |> option.to_result("missing line count")!
+  let rows = value.get_array(j, "symbols") |> option.to_result("missing symbols")!
   var syms: List[Sym] = []
   for row in rows {
-    let kind = json.get_string(row, "kind") |> option.to_result("missing kind")!
-    let name = json.get_string(row, "name") |> option.to_result("missing name")!
-    let start = json.get_int(row, "start") |> option.to_result("missing start")!
-    let end = json.get_int(row, "end") |> option.to_result("missing end")!
+    let kind = value.get_string(row, "kind") |> option.to_result("missing kind")!
+    let name = value.get_string(row, "name") |> option.to_result("missing name")!
+    let start = value.get_int(row, "start") |> option.to_result("missing start")!
+    let end = value.get_int(row, "end") |> option.to_result("missing end")!
     list.push(syms, Sym { kind: kind, name: name, start: start, end: end })
   }
   ok(Outline { lang: lang, total_lines: total, symbols: syms, engine: "provider" })
@@ -206,7 +206,7 @@ fn from_json(text: String) -> Result[Outline, String] = {
 
 effect fn via_helper(provider: Option[String], path: String) -> Option[Outline] = match provider {
   none => none,
-  some(bin) => match process.exec_status_timeout(bin, [path], 3000) {
+  some(bin) => match process.output(process.ProcessCommand { cmd: bin, args: [path], timeout_ms: 3000 }) {
     ok(st) => if st.code == 0 then (match from_json(st.stdout) { ok(o) => some(o), err(_) => none }) else none,
     err(_) => none,
   },
@@ -229,8 +229,8 @@ fn valid_outline(o: Outline, lang: String, total: Int) -> Bool =
 // process: the schema is the one contract every source of an outline speaks.
 fn gramide_result(raw: String, lang: String, total: Int) -> Result[Outline, String] = {
   let j = json.parse(raw)!
-  guard (json.get_int(j, "schema_version") ?? 0) == 1 else err("unsupported symbol schema")
-  guard json.get_bool(j, "complete") ?? false else err("incomplete parse")
+  guard (value.get_int(j, "schema_version") ?? 0) == 1 else err("unsupported symbol schema")
+  guard value.get_bool(j, "complete") ?? false else err("incomplete parse")
   let o = from_json(raw)!
   guard valid_outline(o, lang, total) else err("invalid symbol ranges")
   ok(Outline { ...o, engine: "gramide" })
@@ -250,32 +250,32 @@ fn intersects_error(ranges: List[(Int, Int)], start: Int, end: Int) -> Bool = {
 }
 fn recovered_result(raw: String, lang: String, total: Int) -> Result[Outline, String] = {
   let j = json.parse(raw)!
-  guard (json.get_string(j, "recovery_policy") ?? "") == "error-free-declarations-v1" else err("unsupported recovery policy")
-  if json.get_bool(j, "complete") ?? false then {
-    let errors = json.get_array(j, "errors") |> option.to_result("missing recovery ranges")!
-    guard list.is_empty(errors) and json.get_string(j, "diagnostic") == some("") else err("inconsistent complete recovery result")
+  guard (value.get_string(j, "recovery_policy") ?? "") == "error-free-declarations-v1" else err("unsupported recovery policy")
+  if value.get_bool(j, "complete") ?? false then {
+    let errors = value.get_array(j, "errors") |> option.to_result("missing recovery ranges")!
+    guard list.is_empty(errors) and value.get_string(j, "diagnostic") == some("") else err("inconsistent complete recovery result")
     gramide_result(raw, lang, total)
   } else {
-    guard (json.get_int(j, "schema_version") ?? 0) == 1 and json.get_bool(j, "complete") == some(false) else err("invalid recovered schema")
-    guard (json.get_string(j, "diagnostic") ?? "") != "" else err("missing recovery diagnostic")
-    let errors = json.get_array(j, "errors") |> option.to_result("missing recovery ranges")!
+    guard (value.get_int(j, "schema_version") ?? 0) == 1 and value.get_bool(j, "complete") == some(false) else err("invalid recovered schema")
+    guard (value.get_string(j, "diagnostic") ?? "") != "" else err("missing recovery diagnostic")
+    let errors = value.get_array(j, "errors") |> option.to_result("missing recovery ranges")!
     guard not list.is_empty(errors) else err("missing recovery ranges")
     var ranges: List[(Int, Int)] = []
     var previous = 0
     for e in errors {
-      let start = json.get_int(e, "start_byte") ?? -1
-      let end = json.get_int(e, "end_byte") ?? -1
-      let line = json.get_int(e, "start") ?? -1
-      let last = json.get_int(e, "end") ?? -1
+      let start = value.get_int(e, "start_byte") ?? -1
+      let end = value.get_int(e, "end_byte") ?? -1
+      let line = value.get_int(e, "start") ?? -1
+      let last = value.get_int(e, "end") ?? -1
       guard start >= previous and end > start and line >= 1 and last >= line and last <= total else err("invalid recovery range")
       list.push(ranges, (start, end))
       previous = end
     }
     let o = from_json(raw)!
     guard valid_outline(o, lang, total) else err("invalid recovered symbol ranges")
-    for row in json.get_array(j, "symbols") ?? [] {
-      let start = json.get_int(row, "start_byte") ?? -1
-      let end = json.get_int(row, "end_byte") ?? -1
+    for row in value.get_array(j, "symbols") ?? [] {
+      let start = value.get_int(row, "start_byte") ?? -1
+      let end = value.get_int(row, "end_byte") ?? -1
       guard start >= 0 and end > start and not intersects_error(ranges, start, end) else err("symbol overlaps recovery error")
     }
     ok(Outline { ...o, engine: "gramide-recovered" })
@@ -309,7 +309,7 @@ fn via_gramide(e: linked.Engines, path: String, text: String, lang: String, tota
 // reads them — the heuristic, which runs when no grammar answered.
 fn line_count(text: String) -> Int =
   if string.len(text) == 0 then 0
-  else string.count(text, "\n") + (if string.ends_with(text, "\n") then 0 else 1)
+  else string.count_matches(text, "\n") + (if string.ends_with(text, "\n") then 0 else 1)
 
 fn linked_or_heuristic(e: linked.Engines, path: String, text: String, lang: String, total: Int) -> Outline =
   match via_gramide(e, path, text, lang, total) {

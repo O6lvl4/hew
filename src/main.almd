@@ -133,7 +133,7 @@ effect fn cmd_file(path: String, args: List[String]) -> Result[Unit, String] = {
 effect fn dealt(paths: List[String], of: Int) -> List[List[Int]] = {
   var order: List[(Int, Int)] = []
   var i = 0
-  for p in paths { list.push(order, (fs.file_size(p) ?? 0, i)); i = i + 1 }
+  for p in paths { list.push(order, ((fs.stat(p) |> result.map((s) => s.size)) ?? 0, i)); i = i + 1 }
   let by_size = list.sort_by(order, (a) => 0 - a.0)
   var arms: List[List[Int]] = []
   var loads: List[Int] = []
@@ -252,7 +252,7 @@ effect fn tree_dir(dir: String, indent: String, level: Int, max_depth: Int) -> R
     if level < max_depth then tree_dir("${dir}/${d}", indent + "  ", level + 1, max_depth)! else ()
   }
   let shown = list.take(files, 40)
-  for f in shown { println("${indent}${f}  ${view.human(fs.file_size("${dir}/${f}") ?? 0)}") }
+  for f in shown { println("${indent}${f}  ${view.human((fs.stat("${dir}/${f}") |> result.map((s) => s.size)) ?? 0)}") }
   if list.len(files) > 40 then println("${indent}… ${int.to_string(list.len(files) - 40)} more files") else ()
   if hidden > 0 then println("${indent}(${int.to_string(hidden)} skipped: vcs / build / deps)") else ()
   ok(())
@@ -307,7 +307,7 @@ effect fn cmd_init(global: Bool) -> Result[Unit, String] = {
     none => (if current == "" then "" else string.trim(current) + "\n\n") + block + "\n",
   }
   if next == current then println("hew note already present in ${path}") else {
-    fs.write(path, next)!
+    fs.write_text(path, next)!
     println("hew note written to ${path} (agents pick it up at their next session start)")
   }
   ok(())

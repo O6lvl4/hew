@@ -11,3 +11,8 @@ gramide_rust = { git = "https://github.com/O6lvl4/gramide-rust", tag = "v0.1.16"
 gramide_python = { git = "https://github.com/O6lvl4/gramide-python", tag = "v0.1.13" }
 gramide_javascript = { git = "https://github.com/O6lvl4/gramide-javascript", tag = "v0.3.13" }
 gramide_typescript = { git = "https://github.com/O6lvl4/gramide-typescript", tag = "v0.3.13" }
+
+# Dialect epoch 15 (#4093): a git dependency outside github.com/almide is fetched only
+# from an owner the root manifest trusts.
+[trust]
+owners = ["github.com/O6lvl4"]
