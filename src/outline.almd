@@ -112,7 +112,7 @@ fn decl_of(lang: String, line: String) -> Option[(String, String)] = {
   list.fold(rules_for(lang), none, (acc, r) => match acc {
     some(x) => some(x),
     none => match regex.captures(regex.new(r.1), t) {
-      some(cs) => match list.get(cs, r.2) { some(n) => if n == "" then none else some((r.0, n)), none => none },
+      some(cs) => match option.flatten(list.get(cs, r.2)) { some(n) => if n == "" then none else some((r.0, n)), none => none },
       none => none,
     },
   })
