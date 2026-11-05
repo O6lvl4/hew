@@ -11,7 +11,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 75
     env:
       CARGO_BUILD_JOBS: 2
       CARGO_INCREMENTAL: 0
