@@ -60,21 +60,21 @@ fn fold_hits(hits: List[Hit], per_file: Int) -> List[Hit] = {
 // prefilter: `regex.is_match` over a 3 MB text with no match takes seconds,
 // longer than the per-line calls it would save.
 let META = "\\^$.|?*+()[]{}"
-fn literal(pat: String) -> Bool = list.all(string.chars(pat), (c) => not string.contains(META, c))
+fn literal(pat: String) -> Bool = list.all(string.to_list(pat), (c) => not string.contains(META, c))
 
 // The text of a file worth searching: not too big, readable, not binary
 effect fn readable(path: String) -> Option[String] = {
-  guard (fs.file_size(path) ?? 0) <= MAX_FILE_BYTES else none
+  guard (match fs.stat(path) { ok(st) => st.size, err(_) => 0 }) <= MAX_FILE_BYTES else none
   let text = match fs.read_text(path) { ok(t) => t, err(_) => "" }
   if text != "" and not looks_binary(text) then some(text) else none
 }
 
-effect fn search_file(engines: linked.Engines, path: String, pat: String, per_file: Int) -> Option[FileHits] = {
+effect fn search_file(engines: linked.Engines, path: String, pat: String, re: Regex, per_file: Int) -> Option[FileHits] = {
   let text = readable(path)! ?? ""
   guard text != "" else none
   guard not literal(pat) or string.contains(text, pat) else none
   let lines = string.lines(text)
-  let matched = list.enumerate(lines) |> list.filter((p) => regex.is_match(pat, p.1))
+  let matched = list.enumerate(lines) |> list.filter((p) => regex.is_match(re, p.1))
   guard not list.is_empty(matched) else none
   // parser-backed where a grammar is linked: a grep label names the real enclosing symbol
   let o = outline.of_file_in(engines, path, text, lines)!
@@ -94,9 +94,10 @@ effect fn search_chunk(files: List[String], from: Int, of: Int, pat: String, per
   var i = from
   while i < list.len(files) { list.push(mine, list.get(files, i) ?? ""); i = i + of }
   let engines = outline.engines_for(mine)
+  let re = regex.compile(pat)!
   i = from
   while i < list.len(files) {
-    match search_file(engines, list.get(files, i) ?? "", pat, per_file) ?? none {
+    match search_file(engines, list.get(files, i) ?? "", pat, re, per_file) ?? none {
       some(fh) => list.push(out, (i, fh)),
       none => (),
     }
@@ -108,6 +109,7 @@ effect fn search_chunk(files: List[String], from: Int, of: Int, pat: String, per
 effect fn run(pat: String, paths: List[String], per_file: Int, max_files: Int) -> List[FileHits] = {
   // not `files` or `found`: the fan capture check is by name across every
   // linked module, and gramide has `var`s of both names (almide #2242)
+  let _ = regex.compile(pat)!  // a bad pattern is the answer, before any file is read
   let grep_files = collect(paths)!
   let r = fan {
     search_chunk(grep_files, 0, 8, pat, per_file),

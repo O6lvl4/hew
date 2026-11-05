@@ -1,0 +1,47 @@
+name: Speed (old vs rc3)
+# Temporary: the hew on main (almide dff9a458, rustc 1.94.0) against this
+# branch's hew (almide v0.69.0-rc3, rustc 1.97.0), both `almide build
+# --release`, timed in alternating order on one runner over the almide repo.
+on:
+  push:
+    branches: [ci-almide-rc3]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  speed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: 2
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { path: new, persist-credentials: false }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { ref: d96ea3d18f0a6e42973da27c7ffca97644f8d9ab, path: old, persist-credentials: false }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { repository: almide/almide, ref: dff9a458f2e581631bb6537c856a7974036e4153, path: .ci/almide-old, persist-credentials: false }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { repository: almide/almide, ref: 3e78b9b6000a3d668d7102b8c7ffa99efeef871f, path: .ci/almide-new, persist-credentials: false }
+      - run: rustup toolchain install 1.94.0 --profile minimal && rustup toolchain install 1.97.0 --profile minimal
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: old-compiler
+        with:
+          path: .ci/almide-old/target/release/almide
+          key: almide-${{ runner.os }}-dff9a458f2e581631bb6537c856a7974036e4153-rust1.94.0
+      - if: steps.old-compiler.outputs.cache-hit != 'true'
+        run: RUSTUP_TOOLCHAIN=1.94.0 cargo build --release --locked --bin almide --manifest-path .ci/almide-old/Cargo.toml
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: new-compiler
+        with:
+          path: .ci/almide-new/target/release/almide
+          key: almide-${{ runner.os }}-3e78b9b6000a3d668d7102b8c7ffa99efeef871f-rust1.97.0
+      - if: steps.new-compiler.outputs.cache-hit != 'true'
+        run: RUSTUP_TOOLCHAIN=1.97.0 cargo build --release --locked --bin almide --manifest-path .ci/almide-new/Cargo.toml
+      - name: Build both hews
+        run: |
+          (cd old && RUSTUP_TOOLCHAIN=1.94.0 ../.ci/almide-old/target/release/almide build --release && ls -l hew)
+          (cd new && RUSTUP_TOOLCHAIN=1.97.0 ../.ci/almide-new/target/release/almide build --release && ls -l hew)
+      - name: Time them
+        run: python3 new/bench/old_vs_new.py old/hew new/hew .ci/almide-new

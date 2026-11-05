@@ -69,9 +69,9 @@ fn footer(shown_lines: Int, shown_bytes: Int) -> String =
   "# shown: ${int.to_string(shown_lines)} lines, ${human(shown_bytes)}"
 
 // Lines matching `pat`, each expanded by `around` lines on both sides.
-fn grep_windows(lines: List[String], pat: String, around: Int) -> List[Window] =
+fn grep_windows(lines: List[String], re: Regex, around: Int) -> List[Window] =
   list.enumerate(lines)
-    |> list.filter((p) => regex.is_match(pat, p.1))
+    |> list.filter((p) => regex.is_match(re, p.1))
     |> list.map((p) => Window { start: p.0 + 1 - around, end: p.0 + 1 + around, note: "" })
 
 test "merge joins touching windows" {

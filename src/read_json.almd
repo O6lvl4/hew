@@ -9,8 +9,8 @@ effect fn read(path: String, limit: Int) -> Result[Unit, String] = {
   let complete = string.len(text) <= limit
   let content = if complete then text else string.take(text, limit)
   println(json.stringify(value.object([
-    ("schema_version", value.int(1)), ("path", value.str(path)),
-    ("complete", value.bool(complete)), ("content", value.str(content)),
+    ("schema_version", value.int(1)), ("path", value.string(path)),
+    ("complete", value.bool(complete)), ("content", value.string(content)),
     ("total_chars", value.int(string.len(text)))
   ])))
   ok(())
