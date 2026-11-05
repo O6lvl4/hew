@@ -1,7 +1,7 @@
 name: Speed (rc3 vs rc4)
-# Temporary: the hew on main (almide dff9a458, rustc 1.94.0) against this
-# branch's hew (almide v0.69.0-rc3, rustc 1.97.0), both `almide build
-# --release`, timed in alternating order on one runner over the almide repo.
+# Temporary: the same hew source built by almide v0.69.0-rc3 (main) and by
+# v0.69.0-rc4 (this branch), both `almide build --release` with rustc 1.97.0,
+# timed in alternating order on one runner over the almide repo.
 on:
   push:
     branches: [ci-almide-rc4]
