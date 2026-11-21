@@ -9,8 +9,8 @@
 //   set and valid, its answer wins, for any language it knows.
 import json
 import regex
-import process
 import env
+import self.helper
 import self.code_mask
 import self.parsers
 import gramide.symbols as structured
@@ -210,12 +210,9 @@ fn from_json(text: String) -> Result[Outline, String] = {
   ok(Outline { lang: lang, total_lines: total, symbols: syms, engine: "provider" })
 }
 
-effect fn via_helper(provider: Option[String], path: String) -> Option[Outline] = match provider {
+effect fn via_helper(provider: Option[String], path: String) -> Option[Outline] = match helper.asked(provider, path)! {
   none => none,
-  some(bin) => match process.output(process.ProcessCommand { cmd: bin, args: [path], timeout_ms: 3000 }) {
-    ok(st) => if st.code == 0 then (match from_json(st.stdout) { ok(o) => some(o), err(_) => none }) else none,
-    err(_) => none,
-  },
+  some(printed) => match from_json(printed) { ok(o) => some(o), err(_) => none },
 }
 
 // ── entry points ──────────────────────────────────────────────────────────

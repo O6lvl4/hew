@@ -1,0 +1,7 @@
+// The outline provider, for the WebAssembly component (ci/build-wasm.sh puts this file
+// in place of src/helper.almd): there is none. A component in a sandbox cannot start a
+// program, and hew built with the native file imports the interface that does, which a
+// host that grants no process refuses to instantiate. The languages hew outlines itself
+// are outlined as always; a language that needs a provider gets the heuristic.
+
+effect fn asked(provider: Option[String], path: String) -> Option[String] = none

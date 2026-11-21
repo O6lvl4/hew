@@ -215,3 +215,23 @@ methods remain selectable by qualified name; an enclosing class or function
 containing an error is omitted. Output says `gramide-recovered`. This does not
 make the file syntactically valid; damage the package cannot bound still uses
 the labeled heuristic fallback.
+
+## As a tool in a sandbox
+
+`ci/build-wasm.sh` builds hew as a WebAssembly component, `build/hew.wasm`, that starts no
+process (the outline provider, the one thing hew runs, is left out of it). A host that
+gives a component a directory read-only and nothing else then has a reader that cannot
+write, run or reach anything, whatever it is asked.
+
+Such hosts start a tool fresh for each call and hand it the call's arguments as JSON on
+stdin. With `HEW_TOOL` naming what an instance is for, hew reads that JSON:
+
+| `HEW_TOOL` | arguments |
+|---|---|
+| `read` | `{"path": P}`, with `"symbol": S`, or `"from": A, "to": B`, or `"grep": RE, "around": N` |
+| `outline` | `{"path": P}` (a file, or a directory's files) |
+| `search` | `{"pattern": RE, "path": P}` (`path` optional) |
+| `tree` | `{"path": P, "depth": N}` (both optional) |
+
+`HEW_ROOT` is where the sandbox shows the project and `HEW_HOST_ROOT` where the model
+knows it to be: a path under the second is read as the same path under the first.
