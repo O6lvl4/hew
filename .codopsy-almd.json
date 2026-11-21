@@ -1,9 +1,11 @@
 {
   "src/code_mask.almd": 8,
+  "src/helper.almd": 4,
   "src/main.almd": 11,
   "src/outline.almd": 12,
   "src/parsers.almd": 2,
   "src/read_json.almd": 3,
   "src/search.almd": 6,
+  "src/tool.almd": 7,
   "src/view.almd": 6
 }

@@ -1,0 +1,79 @@
+// hew as a sandbox's tool: one call, its arguments as JSON on stdin.
+//
+// A host that runs tools for an agent (an MCP server in front of sandboxed programs)
+// starts a tool fresh for each call and gives it the call's arguments as JSON on stdin,
+// not on a command line. With HEW_TOOL naming what this instance is for, hew reads that
+// JSON and does the one thing:
+//
+//   HEW_TOOL=read      {"path": P, "symbol": S} | {"path": P, "from": A, "to": B}
+//                      | {"path": P, "grep": RE, "around": N} | {"path": P}
+//   HEW_TOOL=outline   {"path": P}                 a file, or every file of a directory
+//   HEW_TOOL=search    {"pattern": RE, "path": P}  P is optional: the whole of the root
+//   HEW_TOOL=tree      {"path": P, "depth": N}     both optional
+//
+// One program can then be four tools, each with a schema of its own for the model.
+//
+// The sandbox shows the project somewhere other than where the model knows it to be: the
+// model learned /home/u/proj from a terminal, and the tool sees it mounted at /work. So a
+// path under HEW_HOST_ROOT is read as the same path under HEW_ROOT, and a path with no
+// leading `/` is taken from HEW_ROOT. The root itself is written with a trailing slash: a
+// component cannot stat the directory it was given by its bare name (seen under two
+// hosts, 2026-11-21: `/work` does not exist, `/work/` is a directory).
+
+fn placed(given: String, root: String, host_root: String) -> String = {
+  let g = string.trim(given)
+  let at = if g == "" or g == "." then root
+    else if host_root != "" and g == host_root then root
+    else if host_root != "" and string.starts_with(g, host_root + "/") then root + string.drop(g, string.len(host_root))
+    else if string.starts_with(g, "/") then g
+    else root + "/" + (string.strip_prefix(g, "./") ?? g)
+  if at == root and root != "" and not string.ends_with(root, "/") then root + "/" else at
+}
+
+fn text_of(a: Value, k: String) -> String = string.trim(value.get_string(a, k) ?? "")
+fn int_of(a: Value, k: String) -> Int = value.get_int(a, k) ?? (int.parse(value.get_string(a, k) ?? "") ?? 0)
+
+fn with_int(a: Value, k: String, flag: String) -> List[String] = if int_of(a, k) > 0 then [flag, int.to_string(int_of(a, k))] else []
+
+// What `read` shows of a file: one symbol, the lines that match, a range, or all of it.
+fn read_args(a: Value, path: String) -> List[String] =
+  if text_of(a, "symbol") != "" then [path, "--symbol", text_of(a, "symbol")]
+  else if text_of(a, "grep") != "" then [path, "--grep", text_of(a, "grep")] + with_int(a, "around", "--around")
+  else if int_of(a, "from") > 0 or int_of(a, "to") > 0 then {
+    let from = int.max(1, int_of(a, "from"))
+    [path, "--lines", int.to_string(from) + "-" + int.to_string(if int_of(a, "to") > 0 then int_of(a, "to") else from + 200)]
+  }
+  else [path]
+
+// The command line the call stands for, or what is wrong with it.
+fn args_for(tool: String, a: Value, root: String, host_root: String) -> Result[List[String], String] = {
+  let path = placed(text_of(a, "path"), root, host_root)
+  let needs_path = (tool == "outline" or tool == "read") and text_of(a, "path") == ""
+  if needs_path then err(tool + " needs a path")
+  else match tool {
+    "outline" => ok(["outline", path]),
+    "read" => ok(read_args(a, path)),
+    "tree" => ok(["tree", path] + with_int(a, "depth", "--depth")),
+    "search" => if text_of(a, "pattern") == "" then err("search needs a pattern") else ok(["grep", text_of(a, "pattern"), path]),
+    _ => err("HEW_TOOL is " + tool + "; it is one of read, outline, search, tree"),
+  }
+}
+
+test "a path the model knows is the same path where the sandbox shows it" {
+  assert_eq(placed("/home/u/proj/src/a.py", "/work", "/home/u/proj"), "/work/src/a.py")
+  assert_eq(placed("src/a.py", "/work", "/home/u/proj"), "/work/src/a.py")
+  assert_eq(placed("./src/a.py", "/work", ""), "/work/src/a.py")
+  assert_eq(placed("/home/u/proj", "/work", "/home/u/proj"), "/work/")
+  assert_eq(placed("", "/work", ""), "/work/")
+  assert_eq(placed(".", "/work", ""), "/work/")
+  assert_eq(placed("/etc/hosts", "/work", "/home/u/proj"), "/etc/hosts")
+}
+
+test "a call's arguments are the command line they stand for" {
+  let a = value.object([("path", value.string("src/a.py")), ("symbol", value.string("main"))])
+  assert_eq(args_for("read", a, "/work", ""), ok(["/work/src/a.py", "--symbol", "main"]))
+  assert_eq(args_for("read", value.object([("path", value.string("a.py")), ("from", value.int(10)), ("to", value.int(20))]), "/work", ""), ok(["/work/a.py", "--lines", "10-20"]))
+  assert_eq(args_for("search", value.object([("pattern", value.string("fn main"))]), "/work", ""), ok(["grep", "fn main", "/work/"]))
+  assert_eq(args_for("tree", value.object([]), "/work", ""), ok(["tree", "/work/"]))
+  assert_eq(args_for("outline", value.object([]), "/work", ""), err("outline needs a path"))
+}

@@ -1,0 +1,17 @@
+// The outline provider: an external program that is given a path and prints an outline
+// as JSON (HEW_OUTLINE_BIN). This is the one place hew starts a process, kept in a file
+// of its own so that the build for a sandbox can leave it out: ci/build-wasm.sh builds
+// hew as a WebAssembly component with wasm/helper.almd in this file's place, and that
+// component asks its host for no way to start anything.
+
+import process
+
+// What the provider printed for `path`, or none when there is no provider, it could not
+// be run, or it failed.
+effect fn asked(provider: Option[String], path: String) -> Option[String] = match provider {
+  none => none,
+  some(bin) => match process.output(process.ProcessCommand { cmd: bin, args: [path], timeout_ms: 3000 }) {
+    ok(st) => if st.code == 0 then some(st.stdout) else none,
+    err(_) => none,
+  },
+}

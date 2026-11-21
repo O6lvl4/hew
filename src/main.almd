@@ -15,6 +15,9 @@ import fs
 import env
 import process
 import self.view
+import self.tool
+import io
+import json
 import self.outline
 import self.search
 import self.parsers
@@ -327,8 +330,21 @@ effect fn run(args: List[String]) -> Result[Unit, String] = {
   else cmd_file(first, args)
 }
 
+// As a sandbox's tool (tool.almd): the call's arguments are JSON on stdin, and what this
+// instance is for is in HEW_TOOL.
+effect fn tool_args(named: String) -> Result[List[String], String] = {
+  let a = json.parse(io.read_all()) ?? value.object([])
+  tool.args_for(named, a, env.get("HEW_ROOT") ?? ".", env.get("HEW_HOST_ROOT") ?? "")
+}
+
 effect fn main() -> Unit = {
-  match run(env.args()) {
+  let named = string.trim(env.get("HEW_TOOL") ?? "")
+  // A tool's failure is its answer: it is printed where the caller reads the result.
+  if named != "" then match tool_args(named) {
+    err(e) => println("[hew: ${e}]"),
+    ok(args) => match run(args) { ok(_) => (), err(e) => println("[hew: ${e}]") },
+  }
+  else match run(env.args()) {
     ok(_) => (),
     err(e) => { eprintln("hew: ${e}"); process.exit(1) },
   }
